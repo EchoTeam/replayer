@@ -54,12 +54,16 @@ change_ring(Ring) ->
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
-init(_Args) ->
-    {ok, #state{}}.
+init(Args) ->
+    State = #state{},
+    Handler = proplists:get_value(handler, Args, State#state.handler),
+    Tasks   = proplists:get_value(tasks, Args, State#state.tasks),
+    Ring    = proplists:get_value(ring, Args, State#state.ring),
+    {ok, State#state{
+            handler=Handler,
+            tasks = Tasks,
+            ring = Ring}}.
 
-handle_call(clean_tasks, _From, State) ->
-    NewState = State#state{tasks=[]},
-    {reply, ok, NewState};
 handle_call({change_tasks, Tasks}, _From, State) ->
     Handler = State#state.handler,
     CurTasks = State#state.tasks,
