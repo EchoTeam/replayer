@@ -14,7 +14,7 @@
 request_timestamp({get, Ts, _}) -> Ts;
 request_timestamp({post, Ts, _, _}) -> Ts.
 
-
+% tasks_gatherer:merge_logs([{disk_log, "./submit_requests.0.log"}, {disk_log, "./users_update_requests.0.log"},{csv_log, "./search_requests.0.log"}], "./merged.log").
 -spec merge_logs(From :: [task()], To :: string()) -> ok | {error, Why :: string()}.
 merge_logs(Tasks, FileName) ->
     Files = [ F || {_, F} <- Tasks ],
@@ -23,7 +23,7 @@ merge_logs(Tasks, FileName) ->
         true -> 
             try merge_logs_ll(Tasks, FileName) 
             catch C:R ->
-                io:format("ERROR: failed due to error:~p~n", [{C,R}]),
+                io:format("ERROR: failed due to error:~p~nStack:~p~n", [{C,R}, erlang:get_stacktrace()]),
                 {error, lists:flatten(io_lib:format("~p", [{C,R}]))}
             end;
         _ -> 
@@ -41,12 +41,18 @@ merge_logs_ll(Tasks, FileName) ->
     OpenedTasks = open_tasks(Tasks),
     ok = open_target_file(FileName),
     merge(OpenedTasks),
+    close_target_file(),
     ok.
 
 open_target_file(File) ->
-    {ok, ?TARGET} = disk_log:open({name, ?TARGET}, {file, File}, {repair, truncate}),
+    case disk_log:open([{name, ?TARGET}, {file, File}, {repair, truncate}]) of
+        {ok, ?TARGET} -> nop;
+        Error -> throw({open_target_file, Error})
+    end,
     ok.
 
+close_target_file() ->
+    disk_log:close(?TARGET).
 
 open_tasks(Tasks) ->
     lists:map(fun
@@ -63,7 +69,8 @@ open_tasks(Tasks) ->
 
 disk_log_reader(File) -> 
     disk_log:open([{name, File}, {file, File}, {mode, read_only}]),
-    {disk_log_reader_fun(File, start), []}.
+    Fun = disk_log_reader_fun(File, start),
+    Fun().
 
 disk_log_reader_fun(Name, Continuation) ->
     fun() ->
@@ -71,27 +78,29 @@ disk_log_reader_fun(Name, Continuation) ->
                 {Continuation2, Items} -> 
                     Requests = lists:map(fun disk_log_item_process/1, Items),
                     {disk_log_reader_fun(Name, Continuation2), Requests};
-                eof -> eof;
+                eof -> disk_log:close(Name), eof;
                 Error -> throw({"Error while reading log", Name, Error})
             end
     end.
 
 csv_log_reader(File) -> 
     {ok, FH} = file:open(File, [read, binary]),
-    {csv_log_reader_fun({File, FH}, undefined), []}.
+    Fun = csv_log_reader_fun({File, FH}, undefined),
+    Fun().
 
             
 csv_log_reader_fun({Name, FH}, _Cont) ->
     fun() ->
             case io:get_line(FH, '') of
                 {error, Error} -> throw({"Error while reading log", Name, Error});
-                eof -> eof;
+                eof -> file:close(FH), eof;
                 "\n" -> csv_log_reader_fun({Name, FH}, undefined);
                 "\r\n" -> csv_log_reader_fun({Name, FH}, undefined);
                 Data -> 
                     Items = string:tokens(strip(binary_to_list(Data)), [$;]),
-                    Requests = lists:map(fun csv_log_item_process/1, Items),
-                    {csv_log_reader_fun({Name, FH}, undefined), Requests}
+                    Request = csv_log_item_process(Items),
+                    %io:format("Request:~p~n", [Request]),
+                    {csv_log_reader_fun({Name, FH}, undefined), [Request]}
             end
     end.
 
@@ -101,24 +110,47 @@ disk_log_item_process({Endpoint, Ts, Data}) ->
     Url = "http://api.aboutecho.com/" ++ E,
     {post, Ts, Url, Data}.
 
+% see https://github.com/lkiesow/erlang-datetime/blob/master/datetime.erl for the help
 -spec csv_log_item_process([string()]) -> request().
-csv_log_item_process([Ts,Url]) ->
+csv_log_item_process([DateTimeStr,Endpoint]) ->
+    {ok, [MonStr, Day, Year, Hour, Min, Sec, MS], []} = io_lib:fread("~3s ~d, ~d ~d:~d:~d.~d", DateTimeStr),
+    Mon = month(MonStr),
+    Secs  = calendar:datetime_to_gregorian_seconds( {{Year,Mon,Day},{Hour,Min,Sec}}) - 
+                calendar:datetime_to_gregorian_seconds({{1970,1,1},{0,0,0}}),
+    Ts = {Secs div 1000000, Secs rem 1000000, MS},
+    Url = "http://api.aboutecho.com" ++ Endpoint,
     {get, Ts, Url}.
 
+month("Jan") -> 1;
+month("Feb") -> 2;
+month("Mar") -> 3;
+month("Apr") -> 4;
+month("May") -> 5;
+month("Jun") -> 6;
+month("Jul") -> 7;
+month("Aug") -> 8;
+month("Sep") -> 9;
+month("Oct") -> 10;
+month("Nov") -> 11;
+month("Dec") -> 12.
+
 strip(Str) ->
-    lists:foldl(fun(Char, Acc) -> string:strip(Acc, Char) end, Str, [$\r, $\n]).
+    lists:foldl(fun(Char, Acc) -> string:strip(Acc, both, Char) end, Str, [$\r, $\n]).
 
+merge([]) -> ok;
 merge([{_,[R|_]} | _ ] = Handlers) -> 
-    MinIdx = min_idx(1, request_timestamp(R), Handlers),
+    MinIdx = min_idx(1, {1,request_timestamp(R)}, Handlers),
+    %io:format("MinIdx:~p Handlers:~p~n", [MinIdx, Handlers]),
     {Request, NewHandlers} = get_and_read_next(MinIdx, Handlers),
+    %io:format("Request: ~p~n", [element(2,Request)]),
     disk_log:log(?TARGET, Request),
-    merge(NewHandlers),
-    ok.
+    merge(NewHandlers).
 
-min_idx(Idx, Min, [{_, [R|_]} | Rest]) ->
+min_idx(_CurIdx, {MinIdx, _Min}, []) -> MinIdx;
+min_idx(CurIdx, {_MinIdx, Min} = M, [{_, [R|_]} | Rest]) ->
     case request_timestamp(R) of 
-        Cur when Cur < Min -> min_idx(Idx+1, Cur, Rest);
-        _ -> min_idx(Idx+1, Min, Rest)
+        Cur when Cur < Min -> min_idx(CurIdx+1, {CurIdx, Cur}, Rest);
+        _ -> min_idx(CurIdx+1, M, Rest)
     end.
 
 get_and_read_next(Idx, Handlers) ->
@@ -126,12 +158,14 @@ get_and_read_next(Idx, Handlers) ->
         ({ContFun, [R|Rs]}, {N, _, Acc}) when N == Idx ->  % found handler with the minimum el
             NewAcc = case Rs of   % check if we have more items in the chunk
                 [] -> 
+                    %io:format("Handlers:~p~nIdx=~p~nRs=~p~n", [Handlers, Idx, Rs]),
                     case ContFun() of   % no more elements read. Need next chunk
                         eof -> Acc;  % end of file, nothing to pass through
                         {_ContFun2, _NextRs} = El -> [El|Acc]
                     end;
                 _ -> [{ContFun,Rs}|Acc]   % have enough elements from the previos chunk to continue working
             end,
+            %io:format("Acc:~p~nNewAcc:~p~n", [Acc, NewAcc]),
             {N+1, R, NewAcc};
         (El, {N, R, Acc}) -> {N+1, R, [El|Acc]}
     end, {1, undefined, []}, Handlers),
