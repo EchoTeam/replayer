@@ -8,7 +8,7 @@
 
 -export([
     start_link/0,
-    change_tasks/1,
+    change_tasks_file/1,
     change_ring/1
 ]).
 
@@ -16,10 +16,6 @@
     task/0
 ]).
 
-% testing purposes
--export([
-    create_tasks_ll/2
-]).
 %% ------------------------------------------------------------------
 %% gen_server Function Exports
 %% ------------------------------------------------------------------
@@ -29,8 +25,8 @@
 
 -record(state, {
         handler = ?MODULE :: module(),  % for eunit tests
-        tasks = []   :: [task()],
-        ring=[]      :: [node()]
+        tasks_file = undefined :: [string()],
+        ring = []      :: [node()]
 }).
 
 -type task_type() :: disk_log | csv_log.
@@ -43,9 +39,9 @@
 start_link() ->
     gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
 
--spec change_tasks([task()]) -> {ok, changed} | {ok, no_change_needed} | {error, any()}.
-change_tasks(Tasks) ->
-    gen_server:call(?MODULE, {change_tasks, Tasks}).
+-spec change_tasks_file(File :: string()) -> {ok, changed} | {ok, no_change_needed} | {error, any()}.
+change_tasks_file(File) ->
+    gen_server:call(?MODULE, {change_tasks_file, File}).
 
 change_ring(Ring) ->
     gen_server:call(?MODULE, {change_ring, Ring}).
@@ -57,46 +53,26 @@ change_ring(Ring) ->
 init(Args) ->
     State = #state{},
     Handler = proplists:get_value(handler, Args, State#state.handler),
-    Tasks   = proplists:get_value(tasks, Args, State#state.tasks),
+    TasksFile = proplists:get_value(tasks_file, Args, State#state.tasks_file),
     Ring    = proplists:get_value(ring, Args, State#state.ring),
     {ok, State#state{
-            handler=Handler,
-            tasks = Tasks,
+            handler = Handler,
+            tasks_file = TasksFile,
             ring = Ring}}.
 
-handle_call({change_tasks, Tasks}, _From, State) ->
-    Handler = State#state.handler,
-    CurTasks = State#state.tasks,
-    NewTasks = lists:sort(Tasks),
-    Res = case CurTasks == NewTasks of
+handle_call({change_tasks_file, File}, _From, State) ->
+    Res = case State#state.tasks_file == File of
         true -> {ok, no_change_needed};
-        _ ->
-            try Handler:create_tasks_ll(Tasks, State#state.ring) of
-                _ -> {ok, changed}
-            catch C:R ->
-                {error, {C,R}}
-            end
+        _ -> {ok, changed}
     end,
-    case Res of
-        {ok, _} -> {reply, Res, State#state{tasks = NewTasks}};
-        _ -> {reply, Res, State}
-    end;
+    {reply, Res, State#state{tasks_file = File}};
 handle_call({change_ring, NewRing_}, _From, State) ->
-    Handler = State#state.handler,
     NewRing = lists:sort(NewRing_),
     Res = case NewRing == State#state.ring of
         true -> {ok, no_change_needed};
-        _ ->
-            try Handler:create_tasks_ll(State#state.tasks, NewRing) of
-                _ -> {ok, changed}
-            catch C:R ->
-                {error, {C,R}}
-            end
+        _ -> {ok, changed}
     end,
-    case Res of
-        {ok, _} -> {reply, Res, State#state{ring = NewRing}};
-        _ -> {reply, Res, State}
-    end;
+    {reply, Res, State#state{ring = NewRing}};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -111,16 +87,3 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
-
-%% ------------------------------------------------------------------
-%% Internal Function Definitions
-%% ------------------------------------------------------------------
--record(file_pos, {
-        file = ""    :: string(),
-        pos  = 0     :: non_neg_integer()
-}).
-
-create_tasks_ll(Tasks, Ring) -> 
-    S = #file_pos{},
-    throw("undefined function"),
-    {Tasks, Ring, S}.
