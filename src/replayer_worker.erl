@@ -7,17 +7,20 @@
 ]).
 
 disk_log_file() ->
-    "/tmp/" ++ atom_to_list(?MODULE) ++ ".disk_log".
+    "/tmp/" ++ atom_to_list(?MODULE) ++ "." ++ atom_to_list(node()) ++ ".disk_log".
 
 append_task(Req) ->
     disk_log:log(Req).
 
 create_task_file() ->
+    io:format("~p: creating ~p~n", [node(), disk_log_file()]),
+    File = disk_log_file(),
     disk_log:open([
-            {name, ?MODULE},
-            {file, disk_log_file()},
+            {name, File},
+            {file, File},
             {repair, truncate}
         ]).
 
 close_task_file() ->
+    io:format("~p: closing ~p~n", [node(), disk_log_file()]),
     disk_log:close(?MODULE).
