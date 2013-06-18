@@ -25,6 +25,8 @@ start_link() ->
 
 init([]) ->
     {ok, { {one_for_one, 5, 10}, [
-        ?CHILD(tasks_generator, worker)
+        ?CHILD(tasks_generator, worker),
+        {replayer_controller, {replayer_controller, start_link, [[]]},
+            permanent, 5000, worker, [replayer_controller]}
             ]} }.
 
