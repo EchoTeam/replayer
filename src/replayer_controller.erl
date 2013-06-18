@@ -82,14 +82,12 @@ handle_call(prepare, _From, State) ->
     Res = case disk_log:open([{name, ?MODULE}, {file, State#state.tasks_file}, {mode, read_only}]) of
         {error, _} = E -> E;
         _ ->
-            {match, [BaseDir]} = re:run(State#state.tasks_file, "(.*/)", [{capture, [1], list}]),
-            [ create_node_requests_file(BaseDir, Node) || Node <- Ring ],
+            [ rpc:call(Node, replayer_worker, create_task_file, []) || Node <- Ring ],
             with_chunks(
-                fun(Chunks) -> save_requests_to_file(Chunks, Ring) end,
+                fun(Chunks) -> copy_tasks_to_ring(Chunks, Ring) end,
                 disk_log:chunk(?MODULE, start)),
             disk_log:close(?MODULE),
-            [ close_node_requests_file(BaseDir, Node) || Node <- Ring ],
-            send_files_to_nodes(BaseDir, Ring),
+            [ rpc:call(Node, replayer_worker, close_task_file, []) || Node <- Ring ],
             ok
     end,
     {reply, Res, State};
@@ -119,19 +117,8 @@ with_chunks(Fun, {Cont, Chunks, _Badbytes}) ->
     Fun(Chunks),
     with_chunks(Fun, disk_log:chunk(?MODULE, Cont)).
 
-file_for_node(BaseDir, Node) ->
-    BaseDir ++ atom_to_list(Node) ++ ".requests.disk_log".
-
-create_node_requests_file(BaseDir, Node) ->
-    File = file_for_node(BaseDir, Node),
-    disk_log:open([{name, File}, {file, File}, {repair, truncate}]).
-
-close_node_requests_file(BaseDir, Node) ->
-    File = file_for_node(BaseDir, Node),
-    disk_log:close(File).
-
-save_requests_to_file(Requests, Ring) ->
-    [ rpc:call(random_node(Ring), replayer_worker, append_task, [R]) || R <- Requests ],
+copy_tasks_to_ring(Chunks, Ring) ->
+    [ rpc:call(random_node(Ring), replayer_worker, append_task, [Chunk]) || Chunk <- Chunks ],
     ok.
 
 random_node(Ring) -> 
@@ -142,4 +129,3 @@ random_element(Alternatives) ->
     R = element(3, now()),
     lists:nth((R rem N) + 1, Alternatives).
     
-
