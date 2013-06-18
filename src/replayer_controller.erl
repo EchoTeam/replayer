@@ -7,7 +7,7 @@
 %% ------------------------------------------------------------------
 
 -export([
-    start_link/0,
+    start_link/1,
     change_tasks_file/1,
     change_ring/1,
     prepare/0
@@ -37,8 +37,8 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
-start_link() ->
-    gen_server:start_link({local, ?SERVER}, ?MODULE, [], []).
+start_link(Args) ->
+    gen_server:start_link({local, ?SERVER}, ?MODULE, Args, []).
 
 -spec change_tasks_file(File :: string()) -> {ok, changed} | {ok, no_change_needed} | {error, any()}.
 change_tasks_file(File) ->
@@ -48,7 +48,7 @@ change_ring(Ring) ->
     gen_server:call(?MODULE, {change_ring, Ring}).
 
 prepare() ->
-    gen_server:call(?MODULE, prepare).
+    gen_server:call(?MODULE, prepare, infinity).
 
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
@@ -82,12 +82,7 @@ handle_call(prepare, _From, State) ->
     Res = case disk_log:open([{name, ?MODULE}, {file, State#state.tasks_file}, {mode, read_only}]) of
         {error, _} = E -> E;
         _ ->
-            [ rpc:call(Node, replayer_worker, create_task_file, []) || Node <- Ring ],
-            with_chunks(
-                fun(Chunks, Acc) -> copy_tasks_to_ring(Chunks, Ring, Acc) end,
-                disk_log:chunk(?MODULE, start), {0, length(Ring)}),
-            disk_log:close(?MODULE),
-            [ rpc:call(Node, replayer_worker, close_task_file, []) || Node <- Ring ],
+            copy_tasks_to_ring(Ring),
             ok
     end,
     {reply, Res, State};
@@ -117,17 +112,35 @@ with_chunks(Fun, {Cont, Chunks, _Badbytes}, Acc) ->
     NewAcc = Fun(Chunks, Acc),
     with_chunks(Fun, disk_log:chunk(?MODULE, Cont), NewAcc).
 
-copy_tasks_to_ring(Chunks, Ring, {NodeNo, RingSize}) ->
+copy_tasks_to_ring(Ring) ->
+    try 
+        begin
+            [ rpc:call(Node, replayer_worker, create_task_file, []) || Node <- Ring ],
+            with_chunks(
+                fun(Chunks, Acc) -> copy_chunks(Chunks, Ring, Acc) end,
+                disk_log:chunk(?MODULE, start), {1, length(Ring)}),
+            disk_log:close(?MODULE)
+        end
+    catch C:R -> 
+        io:format("Error occured while copying tasks to ring:~p~n", [{C,R}])
+    end,
+    [ rpc:call(Node, replayer_worker, close_task_file, []) || Node <- Ring ],
+    ok.
+
+copy_chunks(Chunks, Ring, {NodeNo, RingSize}) ->
     NewNodeNo = lists:foldl(fun(Chunk, NodeNo_) ->
             {NewNodeNo_, Node} = get_next_node(NodeNo_, RingSize, Ring),
-            rpc:call(Node, replayer_worker, append_task, [Chunk]),
+            case rpc:call(Node, replayer_worker, append_task, [Chunk]) of
+                {badrpc, _} = Error -> throw({Node, Error});
+                _ -> nop
+            end,
             NewNodeNo_
         end, NodeNo, Chunks),
     {NewNodeNo, RingSize}.
 
 get_next_node(NodeNo, RingSize, Ring) ->
     Node = lists:nth(NodeNo, Ring),
-    {case NodeNo + 1 of
-        V when V == RingSize -> 0;
-        V -> V
+    {case NodeNo of
+        V when V == RingSize -> 1;
+        V -> V + 1
     end, Node}.
