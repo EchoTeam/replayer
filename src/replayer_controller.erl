@@ -1,4 +1,4 @@
--module(tasks_generator).
+-module(replayer_controller).
 -behaviour(gen_server).
 -define(SERVER, ?MODULE).
 
@@ -84,8 +84,8 @@ handle_call(prepare, _From, State) ->
         _ ->
             [ rpc:call(Node, replayer_worker, create_task_file, []) || Node <- Ring ],
             with_chunks(
-                fun(Chunks) -> copy_tasks_to_ring(Chunks, Ring) end,
-                disk_log:chunk(?MODULE, start)),
+                fun(Chunks, Acc) -> copy_tasks_to_ring(Chunks, Ring, Acc) end,
+                disk_log:chunk(?MODULE, start), {0, length(Ring)}),
             disk_log:close(?MODULE),
             [ rpc:call(Node, replayer_worker, close_task_file, []) || Node <- Ring ],
             ok
@@ -110,22 +110,24 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Functions
 %% ------------------------------------------------------------------
 
-with_chunks(_Fun, eof) -> nop;
-with_chunks(Fun, {Cont, Chunks}) ->
-    with_chunks(Fun, {Cont, Chunks, undefined});
-with_chunks(Fun, {Cont, Chunks, _Badbytes}) ->
-    Fun(Chunks),
-    with_chunks(Fun, disk_log:chunk(?MODULE, Cont)).
+with_chunks(_Fun, eof, _Acc) -> nop;
+with_chunks(Fun, {Cont, Chunks}, Acc) ->
+    with_chunks(Fun, {Cont, Chunks, undefined}, Acc);
+with_chunks(Fun, {Cont, Chunks, _Badbytes}, Acc) ->
+    NewAcc = Fun(Chunks, Acc),
+    with_chunks(Fun, disk_log:chunk(?MODULE, Cont), NewAcc).
 
-copy_tasks_to_ring(Chunks, Ring) ->
-    [ rpc:call(random_node(Ring), replayer_worker, append_task, [Chunk]) || Chunk <- Chunks ],
-    ok.
+copy_tasks_to_ring(Chunks, Ring, {NodeNo, RingSize}) ->
+    NewNodeNo = lists:foldl(fun(Chunk, NodeNo_) ->
+            {NewNodeNo_, Node} = get_next_node(NodeNo_, RingSize, Ring),
+            rpc:call(Node, replayer_worker, append_task, [Chunk]),
+            NewNodeNo_
+        end, NodeNo, Chunks),
+    {NewNodeNo, RingSize}.
 
-random_node(Ring) -> 
-    random_element(Ring).
-
-random_element(Alternatives) ->
-    N = length(Alternatives),
-    R = element(3, now()),
-    lists:nth((R rem N) + 1, Alternatives).
-    
+get_next_node(NodeNo, RingSize, Ring) ->
+    Node = lists:nth(NodeNo, Ring),
+    {case NodeNo + 1 of
+        V when V == RingSize -> 0;
+        V -> V
+    end, Node}.

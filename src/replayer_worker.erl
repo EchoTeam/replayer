@@ -13,6 +13,11 @@ append_task(Req) ->
     disk_log:log(Req).
 
 create_task_file() ->
-    disk_log:open([{name, ?MODULE}, {file, disk_log_file()}]).
+    disk_log:open([
+            {name, ?MODULE},
+            {file, disk_log_file()},
+            {repair, truncate}
+        ]).
+
 close_task_file() ->
     disk_log:close(?MODULE).
