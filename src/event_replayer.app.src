@@ -1,12 +1,15 @@
 {application, event_replayer,
  [
-  {description, ""},
-  {vsn, "1"},
+  {description, "requests replayer"},
+  {vsn, "0.1"},
   {registered, []},
   {applications, [
                   kernel,
                   stdlib
                  ]},
   {mod, { event_replayer_app, []}},
-  {env, []}
+  {env, [
+    {disk_log, [{pattern, ["users_update_requests.*.log", "submit_requests.*.log"]}]},
+    {csv, [{pattern, ["search_requests.*.log"]}]}
+  ]}
  ]}.
