@@ -9,7 +9,9 @@
 -export([
     start_link/0,
     change_tasks_file/1,
-    change_ring/1
+    change_ring/1,
+    prepare/0,
+    replay/1
 ]).
 
 -export_type([
@@ -46,6 +48,9 @@ change_tasks_file(File) ->
 change_ring(Ring) ->
     gen_server:call(?MODULE, {change_ring, Ring}).
 
+prepare() ->
+    gen_server:call(?MODULE, prepare).
+
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
@@ -73,6 +78,20 @@ handle_call({change_ring, NewRing_}, _From, State) ->
         _ -> {ok, changed}
     end,
     {reply, Res, State#state{ring = NewRing}};
+handle_call(prepare, _From, State) ->
+    Ring = State#state.ring,
+    Res = case disk_log:open([{name, ?MODULE}, {file, State#state.tasks_file}, {mode, read_only}]) of
+        {error, _} = E -> E;
+        _ ->
+            [ rpc:call(Node, replayer_worker, create_task_file, []) || Node <- Ring ],
+            with_chunks(
+                fun(Chunks) -> copy_tasks_to_ring(Chunks, Ring) end,
+                disk_log:chunk(?MODULE, start)),
+            disk_log:close(?MODULE),
+            [ rpc:call(Node, replayer_worker, close_task_file, []) || Node <- Ring ],
+            ok
+    end,
+    {reply, Res, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -87,3 +106,22 @@ terminate(_Reason, _State) ->
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+%% ------------------------------------------------------------------
+%% Internal Functions
+%% ------------------------------------------------------------------
+
+with_chunks(_Fun, eof) -> nop;
+with_chunks(Fun, {Cont, Chunks}) ->
+    with_chunks(Fun, {Cont, Chunks, undefined});
+with_chunks(Fun, {Cont, Chunks, _Badbytes}) ->
+    Fun(Chunks),
+    with_chunks(Fun, disk_log:chunk(?MODULE, Cont)).
+
+copy_tasks_to_ring(Chunks, Ring) ->
+    F = file_for_random_node(Ring),
+    disk_log
+    [ rpc:call(random_node(Ring), replayer_worker, append_task, [Chunk]) || Chunk <- Chunks ],
+    ok.
+
+random_node(Ring) -> hd(Ring). %FIXME: 
