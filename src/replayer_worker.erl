@@ -15,12 +15,13 @@ append_task(Req) ->
 create_task_file() ->
     io:format("~p: creating ~p~n", [node(), disk_log_file()]),
     File = disk_log_file(),
-    disk_log:open([
+    {ok, _} = disk_log:open([
             {name, File},
+            {linkto, none},
             {file, File},
             {repair, truncate}
         ]).
 
 close_task_file() ->
     io:format("~p: closing ~p~n", [node(), disk_log_file()]),
-    disk_log:close(?MODULE).
+    ok = disk_log:close(disk_log_file()).

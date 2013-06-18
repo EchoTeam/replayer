@@ -115,7 +115,7 @@ with_chunks(Fun, {Cont, Chunks, _Badbytes}, Acc) ->
 copy_tasks_to_ring(Ring) ->
     try 
         begin
-            [ rpc:call(Node, replayer_worker, create_task_file, []) || Node <- Ring ],
+            [ {ok, _} = rpc:call(Node, replayer_worker, create_task_file, []) || Node <- Ring ],
             with_chunks(
                 fun(Chunks, Acc) -> copy_chunks(Chunks, Ring, Acc) end,
                 disk_log:chunk(?MODULE, start), {1, length(Ring)}),
@@ -132,7 +132,8 @@ copy_chunks(Chunks, Ring, {NodeNo, RingSize}) ->
             {NewNodeNo_, Node} = get_next_node(NodeNo_, RingSize, Ring),
             case rpc:call(Node, replayer_worker, append_task, [Chunk]) of
                 {badrpc, _} = Error -> throw({Node, Error});
-                _ -> nop
+                {error, _} = Error -> throw({Node, Error});
+                _V -> nop
             end,
             NewNodeNo_
         end, NodeNo, Chunks),
