@@ -10,7 +10,7 @@ disk_log_file() ->
     "/tmp/" ++ atom_to_list(?MODULE) ++ "." ++ atom_to_list(node()) ++ ".disk_log".
 
 append_task(Req) ->
-    disk_log:log(Req).
+    disk_log:log(disk_log_file(), Req).
 
 create_task_file() ->
     io:format("~p: creating ~p~n", [node(), disk_log_file()]),
