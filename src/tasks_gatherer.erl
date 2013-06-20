@@ -1,18 +1,13 @@
 -module(tasks_gatherer).
 
--export([merge_logs/2]).
+-export([
+    merge_logs/2
+]).
 
 -define(TARGET, merger_target).
 
 -type task_type() :: disk_log | csv_log.
 -type task() :: {Type :: task_type(), FileName :: string()}.
--type request() :: 
-    {get,  Ts :: erlang:timestamp(), URL :: string()} |
-    {post, Ts :: erlang:timestamp(), URL :: string(), Body :: binary()}.
-
-
-request_timestamp({get, Ts, _}) -> Ts;
-request_timestamp({post, Ts, _, _}) -> Ts.
 
 % tasks_gatherer:merge_logs([{disk_log, "./submit_requests.0.log"}, {disk_log, "./users_update_requests.0.log"},{csv_log, "./search_requests.0.log"}], "./merged.log").
 -spec merge_logs(From :: [task()], To :: string()) -> ok | {error, Why :: string()}.
@@ -104,14 +99,14 @@ csv_log_reader_fun({Name, FH}, _Cont) ->
             end
     end.
 
--spec disk_log_item_process({string(), erlang:timestamp(), binary()}) -> request().
+-spec disk_log_item_process({string(), erlang:timestamp(), binary()}) -> replayer_utils:request().
 disk_log_item_process({Endpoint, Ts, Data}) ->
     {match, [E]} = re:run(Endpoint, "/get/api/(.*)", [{capture, [1], list}]),
     Url = "http://api.aboutecho.com/" ++ E,
     {post, Ts, Url, Data}.
 
 % see https://github.com/lkiesow/erlang-datetime/blob/master/datetime.erl for the help
--spec csv_log_item_process([string()]) -> request().
+-spec csv_log_item_process([string()]) -> replayer_utils:request().
 csv_log_item_process([DateTimeStr,Endpoint]) ->
     {ok, [MonStr, Day, Year, Hour, Min, Sec, MS], []} = io_lib:fread("~3s ~d, ~d ~d:~d:~d.~d", DateTimeStr),
     Mon = month(MonStr),
@@ -139,7 +134,10 @@ strip(Str) ->
 
 merge([]) -> ok;
 merge([{_,[R|_]} | _ ] = Handlers) -> 
-    MinIdx = min_idx(1, {1,request_timestamp(R)}, Handlers),
+    MinIdx = min_idx(
+        1, 
+        {1, replayer_utils:request_timestamp(R)}, 
+        Handlers),
     %io:format("MinIdx:~p Handlers:~p~n", [MinIdx, Handlers]),
     {Request, NewHandlers} = get_and_read_next(MinIdx, Handlers),
     %io:format("Request: ~p~n", [element(2,Request)]),
@@ -148,7 +146,7 @@ merge([{_,[R|_]} | _ ] = Handlers) ->
 
 min_idx(_CurIdx, {MinIdx, _Min}, []) -> MinIdx;
 min_idx(CurIdx, {_MinIdx, Min} = M, [{_, [R|_]} | Rest]) ->
-    case request_timestamp(R) of 
+    case replayer_utils:request_timestamp(R) of 
         Cur when Cur < Min -> min_idx(CurIdx+1, {CurIdx, Cur}, Rest);
         _ -> min_idx(CurIdx+1, M, Rest)
     end.

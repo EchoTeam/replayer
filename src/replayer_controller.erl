@@ -10,7 +10,8 @@
     start_link/1,
     change_tasks_file/1,
     change_ring/1,
-    prepare/0
+    prepare/0,
+    replay/1
 ]).
 
 -export_type([
@@ -50,6 +51,11 @@ change_ring(Ring) ->
 prepare() ->
     gen_server:call(?MODULE, prepare, infinity).
 
+-spec replay(Speed :: float()) -> ok | {error, any()}.
+replay(Speed) ->
+    gen_server:call(?MODULE, {replay, Speed}, infinity).
+
+
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
@@ -86,6 +92,19 @@ handle_call(prepare, _From, State) ->
             ok
     end,
     {reply, Res, State};
+handle_call({replay, Speed}, _From, State) ->
+    Ring = State#state.ring,
+    StartTs = get_start_time(1),
+    Refs = [ jsk_async:run(fun() ->
+            rpc:call(Node, replayer_node_orchestrator, replay, [StartTs, Speed])  
+        end) || Node <- Ring
+    ],
+    NodeRes = [jsk_async:wait(Ref) || Ref <- Refs],
+    Res = case lists:filter(fun({ok, _}) -> false; (_) -> true end, NodeRes) of
+        [] -> ok;
+        V -> {error, V}
+    end,
+    {reply, Res, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -105,32 +124,48 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Functions
 %% ------------------------------------------------------------------
 
-with_chunks(_Fun, eof, _Acc) -> nop;
-with_chunks(Fun, {Cont, Chunks}, Acc) ->
-    with_chunks(Fun, {Cont, Chunks, undefined}, Acc);
-with_chunks(Fun, {Cont, Chunks, _Badbytes}, Acc) ->
-    NewAcc = Fun(Chunks, Acc),
-    with_chunks(Fun, disk_log:chunk(?MODULE, Cont), NewAcc).
+% delay in seconds
+get_start_time(Delay) ->
+    {MegaS, S, MicroS} = now(),
+    {NewMegaS, NewS} = case S + Delay of
+        V when V >= 1000000 -> {MegaS + 1, V - 1000000};
+        V -> {MegaS, V}
+    end,
+    {NewMegaS, NewS, MicroS}.
 
 copy_tasks_to_ring(Ring) ->
     try 
         begin
-            [ {ok, _} = rpc:call(Node, replayer_worker, create_task_file, []) || Node <- Ring ],
-            with_chunks(
+            [ {ok, _} = rpc:call(Node, replayer_node_orchestrator, create_task_file, []) || Node <- Ring ],
+            FirstChunk = disk_log:chunk(?MODULE, start, 1),
+            FirstReqTs = case FirstChunk of
+                {_, [Chunk]} -> tasks_gatherer:request_timestamp(Chunk);
+                {_, [Chunk], _} -> tasks_gatherer:request_timestamp(Chunk);
+                _ -> now() % doesn't matter as nothing to replay, just copy smth
+            end,
+            io:format("FirstReqTs:~p~n", [FirstReqTs]),
+
+            [ rpc:call(Node, replayer_node_orchestrator, append_task, [{start_time, FirstReqTs}]) 
+                || Node <- Ring ],
+
+            replayer_utils:with_chunks(
+                ?MODULE,
                 fun(Chunks, Acc) -> copy_chunks(Chunks, Ring, Acc) end,
-                disk_log:chunk(?MODULE, start), {1, length(Ring)}),
-            disk_log:close(?MODULE)
+                FirstChunk,
+                {1, length(Ring)})
         end
     catch C:R -> 
         io:format("Error occured while copying tasks to ring:~p~n", [{C,R}])
+    after
+        disk_log:close(?MODULE)
     end,
-    [ rpc:call(Node, replayer_worker, close_task_file, []) || Node <- Ring ],
+    [ rpc:call(Node, replayer_node_orchestrator, close_task_file, []) || Node <- Ring ],
     ok.
 
 copy_chunks(Chunks, Ring, {NodeNo, RingSize}) ->
     NewNodeNo = lists:foldl(fun(Chunk, NodeNo_) ->
             {NewNodeNo_, Node} = get_next_node(NodeNo_, RingSize, Ring),
-            case rpc:call(Node, replayer_worker, append_task, [Chunk]) of
+            case rpc:call(Node, replayer_node_orchestrator, append_task, [Chunk]) of
                 {badrpc, _} = Error -> throw({Node, Error});
                 {error, _} = Error -> throw({Node, Error});
                 _V -> nop
