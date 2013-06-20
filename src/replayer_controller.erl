@@ -99,7 +99,8 @@ handle_call({replay, Speed}, _From, State) ->
             rpc:call(Node, replayer_node_orchestrator, replay, [StartTs, Speed])  
         end) || Node <- Ring
     ],
-    NodeRes = [jsk_async:wait(Ref) || Ref <- Refs],
+    NodeRes = [jsk_async:join(Ref) || Ref <- Refs],
+    %io:format("NodeRes:~p~n", [NodeRes]),
     Res = case lists:filter(fun({ok, _}) -> false; (_) -> true end, NodeRes) of
         [] -> ok;
         V -> {error, V}
@@ -139,8 +140,8 @@ copy_tasks_to_ring(Ring) ->
             [ {ok, _} = rpc:call(Node, replayer_node_orchestrator, create_task_file, []) || Node <- Ring ],
             FirstChunk = disk_log:chunk(?MODULE, start, 1),
             FirstReqTs = case FirstChunk of
-                {_, [Chunk]} -> tasks_gatherer:request_timestamp(Chunk);
-                {_, [Chunk], _} -> tasks_gatherer:request_timestamp(Chunk);
+                {_, [Chunk]} ->     replayer_utils:request_timestamp(Chunk);
+                {_, [Chunk], _} ->  replayer_utils:request_timestamp(Chunk);
                 _ -> now() % doesn't matter as nothing to replay, just copy smth
             end,
             io:format("FirstReqTs:~p~n", [FirstReqTs]),
