@@ -22,21 +22,30 @@
 %% API Function Definitions
 %% ------------------------------------------------------------------
 
+-define(TIMEOUT, 60000).
+
 start_link(_Args) ->
     gen_server:start_link(?MODULE, [], []).
 
 request(Worker, Req) ->
-    gen_server:call(Worker, {request, Req}),
+    gen_server:call(Worker, {request, Req}, ?TIMEOUT),
     ok.
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
 
 init(_Args) ->
+    %io:format("starting worker ~p~n", [self()]),
     {ok, _State = ok}.
 
-handle_call({req, Req}, _From, State) ->
-    io:format("~p (~p): requesting ~p~n", [self(), node(), Req]),
+handle_call({request, Req}, _From, State) ->
+    io:format("~p (~p): requesting ~n", [self(), node()]),
+    {Method, Url, Body} = case Req of 
+        {get, _, U} -> {get, U, []};
+        {post, _, U, B} -> {post, U, B}
+    end,
+    Res = lhttpc:request(Url, Method, [], Body, infinity),
+    io:format("Res:~p~n", [Res]),
     {reply, ok, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.

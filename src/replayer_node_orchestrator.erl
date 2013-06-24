@@ -1,7 +1,7 @@
 -module(replayer_node_orchestrator).
 
 -export([
-    start_link/1,
+    start_link/0,
     append_task/1,
     create_task_file/0,
     close_task_file/0,
@@ -20,23 +20,25 @@ append_task(Req) ->
 create_task_file() ->
     io:format("~p: creating ~p~n", [node(), disk_log_file()]),
     File = disk_log_file(),
-    {ok, _} = disk_log:open([
+    {ok, File} = disk_log:open([
             {name, File},
             {linkto, none},
-            {file, File},
-            {repair, truncate}
-        ]).
+            {file, File}
+        ]),
+    disk_log:truncate(File),
+    {ok, File}.
 
 close_task_file() ->
     io:format("~p: closing ~p~n", [node(), disk_log_file()]),
     ok = disk_log:close(disk_log_file()).
 
-
-start_link(PoolSize) ->
+start_link() ->
+    {ok, PoolSize} = application:get_env(worker_pool_size),
     poolboy:start([
                 {name, {local, ?MODULE}},
                 {size, PoolSize},
-                {worker_module, ?WORKER}
+                {worker_module, ?WORKER},
+                {max_overflow, 0}
             ]).
 
 replay(RealStartTs, Speed) ->
@@ -64,8 +66,8 @@ replay(RealStartTs, Speed) ->
         disk_log:close(File)
     end.
 
--define(SLEEP_THRESHOLD, -1000). % in microsec
--define(EXIT_THRESHOLD, 1000000). % in microsec
+-define(SLEEP_THRESHOLD, -1000). % in microsec, = 1ms
+-define(EXIT_THRESHOLD, 1000000). % in microsec = 1sec
 
 replay_requests(Reqs, RealStartTs, LogStartTs, Speed) ->
     lists:map(fun(Req) ->
@@ -82,7 +84,6 @@ replay_requests(Reqs, RealStartTs, LogStartTs, Speed) ->
                     timer:sleep(ToSleep),
                     request(Req);
                 Diff when Diff < ?EXIT_THRESHOLD ->
-                    io:format("instant request ~n"),
                     request(Req);
                 _ ->
                     io:format("res3~n"),
@@ -92,12 +93,16 @@ replay_requests(Reqs, RealStartTs, LogStartTs, Speed) ->
     ok.
 
 request(Req) ->
-    case poolboy:checkout(?MODULE) of
+    io:format("poolboy:~p~n", [poolboy:status(?MODULE)]),
+    case poolboy:checkout(?MODULE, false) of
         full -> error(not_enough_workers);
         Worker -> 
-            try
-                replayer_worker:request(Worker, Req)
-            after
-                ok = poolboy:checkin(?MODULE, Worker)
-            end
+            %io:format("Worker ~p does request~n", [Worker]),
+            proc_lib:spawn(fun() ->
+                try 
+                    replayer_worker:request(Worker, Req)
+                after
+                    ok = poolboy:checkin(?MODULE, Worker)
+                end
+            end)
     end.

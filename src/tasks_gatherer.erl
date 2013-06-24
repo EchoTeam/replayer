@@ -40,10 +40,11 @@ merge_logs_ll(Tasks, FileName) ->
     ok.
 
 open_target_file(File) ->
-    case disk_log:open([{name, ?TARGET}, {file, File}, {repair, truncate}]) of
+    case disk_log:open([{name, ?TARGET}, {file, File}]) of
         {ok, ?TARGET} -> nop;
         Error -> throw({open_target_file, Error})
     end,
+    disk_log:truncate(?TARGET),
     ok.
 
 close_target_file() ->

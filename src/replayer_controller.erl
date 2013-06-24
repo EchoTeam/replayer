@@ -10,6 +10,7 @@
     start_link/1,
     change_tasks_file/1,
     change_ring/1,
+    change_workers_num/1,
     prepare/0,
     replay/1
 ]).
@@ -48,6 +49,9 @@ change_tasks_file(File) ->
 change_ring(Ring) ->
     gen_server:call(?MODULE, {change_ring, Ring}).
 
+change_workers_num(WorkersNum) ->
+    gen_server:call(?MODULE, {change_workers_num, WorkersNum}, infinity).
+
 prepare() ->
     gen_server:call(?MODULE, prepare, infinity).
 
@@ -83,6 +87,19 @@ handle_call({change_ring, NewRing_}, _From, State) ->
         _ -> {ok, changed}
     end,
     {reply, Res, State#state{ring = NewRing}};
+handle_call({change_workers_num, _}, _From, #state{ring=[]} = State) ->
+    {reply, {error, "empty ring"}, State};
+handle_call({change_workers_num, WorkersNum}, _From, State) ->
+    Refs = [ {Node, jsk_async:run(fun() ->
+            rpc:call(Node, event_replayer_sup, change_workers_num, [WorkersNum])  
+        end)} || Node <- State#state.ring
+    ],
+    NodeRes = [{Node, jsk_async:join(Ref)} || {Node, Ref} <- Refs],
+    Res = case lists:filter(fun({_, {ok, _}}) -> false; (_) -> true end, NodeRes) of
+        [] -> ok;
+        V -> {error, V}
+    end,
+    {reply, Res, State};
 handle_call(prepare, _From, State) ->
     Ring = State#state.ring,
     Res = case disk_log:open([{name, ?MODULE}, {file, State#state.tasks_file}, {mode, read_only}]) of
@@ -92,16 +109,17 @@ handle_call(prepare, _From, State) ->
             ok
     end,
     {reply, Res, State};
+handle_call({replay, _Speed}, _From, #state{ring=[]} = State) ->
+    {reply, {error, "empty ring"}, State};
 handle_call({replay, Speed}, _From, State) ->
     Ring = State#state.ring,
     StartTs = get_start_time(1),
-    Refs = [ jsk_async:run(fun() ->
+    Refs = [ {Node, jsk_async:run(fun() ->
             rpc:call(Node, replayer_node_orchestrator, replay, [StartTs, Speed])  
-        end) || Node <- Ring
+        end)} || Node <- Ring
     ],
-    NodeRes = [jsk_async:join(Ref) || Ref <- Refs],
-    %io:format("NodeRes:~p~n", [NodeRes]),
-    Res = case lists:filter(fun({ok, _}) -> false; (_) -> true end, NodeRes) of
+    NodeRes = [{Node, jsk_async:join(Ref)} || {Node, Ref} <- Refs],
+    Res = case lists:filter(fun({_, {ok, _}}) -> false; (_) -> true end, NodeRes) of
         [] -> ok;
         V -> {error, V}
     end,
