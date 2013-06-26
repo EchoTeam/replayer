@@ -15,8 +15,14 @@
 %% gen_server Function Exports
 %% ------------------------------------------------------------------
 
--export([init/1, handle_call/3, handle_cast/2, handle_info/2,
-         terminate/2, code_change/3]).
+-export([
+    init/1,
+    handle_call/3,
+    handle_cast/2,
+    handle_info/2,
+    terminate/2,
+    code_change/3
+]).
 
 %% ------------------------------------------------------------------
 %% API Function Definitions
@@ -35,7 +41,6 @@ request(Worker, Req) ->
 %% ------------------------------------------------------------------
 
 init(_Args) ->
-    %io:format("starting worker ~p~n", [self()]),
     {ok, _State = ok}.
 
 handle_call({request, Req}, _From, State) ->
@@ -46,7 +51,6 @@ handle_call({request, Req}, _From, State) ->
     end,
     _Res = lhttpc:request(Url, Method, [], Body, infinity),
     % TODO: check Res, at least code 20x
-    %io:format("Res:~p~n", [Res]),
     {reply, ok, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.

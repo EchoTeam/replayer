@@ -13,7 +13,7 @@
 -export([init/1]).
 
 %% Helper macro for declaring children of supervisor
--define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
+-define(CHILD(I), {I, {I, start_link, []}, permanent, 5000, worker, [I]}).
 
 %% ===================================================================
 %% API functions
@@ -28,10 +28,8 @@ start_link() ->
 
 init([]) ->
     {ok, { {one_for_one, 5, 10}, [
-        ?CHILD(tasks_generator, worker),
-        {replayer_controller, {replayer_controller, start_link, [[]]},
-            permanent, 5000, worker, [replayer_controller]},
-        ?CHILD(replayer_node_orchestrator, worker)
+                ?CHILD(replayer_controller),
+                ?CHILD(replayer_node_orchestrator)
             ]} }.
 
 change_workers_num(WorkersNum) ->
