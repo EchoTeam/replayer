@@ -2,10 +2,7 @@
 
 -export([
     merge_logs/2,
-    log_map/3,
-
-
-    url_replace/1
+    log_map/3
 ]).
 
 -define(TARGET, merger_target).
@@ -13,7 +10,7 @@
 -type task_type() :: disk_log | csv_log.
 -type task() :: {Type :: task_type(), FileName :: string()}.
 
-% tasks_gatherer:merge_logs([{disk_log, "./test/submit_requests.0.log"}, {disk_log, "./test/users_update_requests.0.log"},{csv_log, "./test/search_requests.0.log"}], "./test/merged.log").
+% tasks_gatherer:merge_logs([{disk_log, "./test/submit_requests.log"}, {disk_log, "./test/users_requests.log"}, {disk_log, "./test/search_requests.log"}, {disk_log, "./test/mux_requests.log"}], "./test/merged.log").
 -spec merge_logs(From :: [task()], To :: string()) -> ok | {error, Why :: string()}.
 merge_logs(Tasks, FileName) ->
     Files = [ F || {_, F} <- Tasks ],
@@ -171,19 +168,6 @@ get_and_read_next(Idx, Handlers) ->
         (El, {N, R, Acc}) -> {N+1, R, [El|Acc]}
     end, {1, undefined, []}, Handlers),
     {Request, NewHandlers}.
-
-url_replace_ll(U) ->
-    U1 = re:replace(U, "api.aboutecho.com/v1", "api.gli.ul.js-kit.com/v1", [{return, list}]),
-    re:replace(U1, ".yaws", "", [{return, list}]).
-
-url_replace({get, Ts, Url_}) ->
-    Url = url_replace_ll(Url_),
-    io:format("~p~n", [Url]),
-    {get, Ts, Url};
-url_replace({post, Ts, Url_, Body}) ->
-    Url = url_replace_ll(Url_),
-    io:format("~p~n", [Url]),
-    {post, Ts, Url, Body}.
 
 log_map_walk(LogFrom, LogTo, Cont, Fun) ->
     case disk_log:chunk(LogFrom, Cont, 1) of 

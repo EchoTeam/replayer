@@ -119,7 +119,7 @@ handle_call({replay, Speed}, _From, State) ->
         end)} || Node <- Ring
     ],
     NodeRes = [{Node, jsk_async:join(Ref)} || {Node, Ref} <- Refs],
-    Res = case lists:filter(fun({_, {ok, _}}) -> false; (_) -> true end, NodeRes) of
+    Res = case lists:filter(fun({_, ok}) -> false; (_) -> true end, NodeRes) of
         [] -> ok;
         V -> {error, V}
     end,
