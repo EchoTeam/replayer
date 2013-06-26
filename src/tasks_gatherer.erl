@@ -1,7 +1,11 @@
 -module(tasks_gatherer).
 
 -export([
-    merge_logs/2
+    merge_logs/2,
+    log_map/3,
+
+
+    url_replace/1
 ]).
 
 -define(TARGET, merger_target).
@@ -9,7 +13,7 @@
 -type task_type() :: disk_log | csv_log.
 -type task() :: {Type :: task_type(), FileName :: string()}.
 
-% tasks_gatherer:merge_logs([{disk_log, "./submit_requests.0.log"}, {disk_log, "./users_update_requests.0.log"},{csv_log, "./search_requests.0.log"}], "./merged.log").
+% tasks_gatherer:merge_logs([{disk_log, "./test/submit_requests.0.log"}, {disk_log, "./test/users_update_requests.0.log"},{csv_log, "./test/search_requests.0.log"}], "./test/merged.log").
 -spec merge_logs(From :: [task()], To :: string()) -> ok | {error, Why :: string()}.
 merge_logs(Tasks, FileName) ->
     Files = [ F || {_, F} <- Tasks ],
@@ -42,6 +46,7 @@ merge_logs_ll(Tasks, FileName) ->
 open_target_file(File) ->
     case disk_log:open([{name, ?TARGET}, {file, File}]) of
         {ok, ?TARGET} -> nop;
+        {repaired, ?TARGET, _, _} -> nop;
         Error -> throw({open_target_file, Error})
     end,
     disk_log:truncate(?TARGET),
@@ -100,11 +105,8 @@ csv_log_reader_fun({Name, FH}, _Cont) ->
             end
     end.
 
--spec disk_log_item_process({string(), erlang:timestamp(), binary()}) -> replayer_utils:request().
-disk_log_item_process({Endpoint, Ts, Data}) ->
-    {match, [E]} = re:run(Endpoint, "/get/api/(.*)", [{capture, [1], list}]),
-    Url = "http://api.aboutecho.com/" ++ E,
-    {post, Ts, Url, Data}.
+-spec disk_log_item_process(any()) -> replayer_utils:request().
+disk_log_item_process(El) -> El.
 
 % see https://github.com/lkiesow/erlang-datetime/blob/master/datetime.erl for the help
 -spec csv_log_item_process([string()]) -> replayer_utils:request().
@@ -169,3 +171,34 @@ get_and_read_next(Idx, Handlers) ->
         (El, {N, R, Acc}) -> {N+1, R, [El|Acc]}
     end, {1, undefined, []}, Handlers),
     {Request, NewHandlers}.
+
+url_replace_ll(U) ->
+    U1 = re:replace(U, "api.aboutecho.com/v1", "api.gli.ul.js-kit.com/v1", [{return, list}]),
+    re:replace(U1, ".yaws", "", [{return, list}]).
+
+url_replace({get, Ts, Url_}) ->
+    Url = url_replace_ll(Url_),
+    io:format("~p~n", [Url]),
+    {get, Ts, Url};
+url_replace({post, Ts, Url_, Body}) ->
+    Url = url_replace_ll(Url_),
+    io:format("~p~n", [Url]),
+    {post, Ts, Url, Body}.
+
+log_map_walk(LogFrom, LogTo, Cont, Fun) ->
+    case disk_log:chunk(LogFrom, Cont, 1) of 
+        {Cont2, [El_]} -> 
+            El = Fun(El_),
+            disk_log:log(LogTo, El), 
+            log_map_walk(LogFrom, LogTo, Cont2, Fun);
+        eof -> ok
+    end.
+log_map(LogFrom, LogTo, Fun) ->
+    disk_log:open([{name, LogFrom}, {file, LogFrom}, {mode, read_only}]),
+    disk_log:open([{name, LogTo}, {file, LogTo}]),
+    log_map_walk(LogFrom, LogTo, start, Fun),
+    disk_log:close(LogFrom),
+    disk_log:close(LogTo),
+    ok.
+    
+
