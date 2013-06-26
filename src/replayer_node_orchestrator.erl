@@ -93,7 +93,6 @@ replay_requests(Reqs, RealStartTs, LogStartTs, Speed) ->
     ok.
 
 request(Req) ->
-    io:format("poolboy:~p~n", [poolboy:status(?MODULE)]),
     case poolboy:checkout(?MODULE, false) of
         full -> error(not_enough_workers);
         Worker -> 
