@@ -44,8 +44,9 @@ handle_call({request, Req}, _From, State) ->
         {get, _, U} -> {get, U, []};
         {post, _, U, B} -> {post, U, B}
     end,
-    Res = lhttpc:request(Url, Method, [], Body, infinity),
-    io:format("Res:~p~n", [Res]),
+    _Res = lhttpc:request(Url, Method, [], Body, infinity),
+    % TODO: check Res, at least code 20x
+    %io:format("Res:~p~n", [Res]),
     {reply, ok, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
