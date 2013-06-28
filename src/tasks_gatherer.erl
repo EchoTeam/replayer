@@ -15,7 +15,8 @@
 %                   {disk_log, "./test/submit_requests.log"},
 %                   {disk_log, "./test/users_requests.log"},
 %                   {disk_log, "./test/search_requests.log"},
-%                   {disk_log, "./test/mux_requests.log"}
+%                   {disk_log, "./test/mux_requests.log"},
+%                   {http_log, "/tmp/coser.1000.log"}
 %               ],
 %               "./test/merged.log"
 %           ).
@@ -61,87 +62,25 @@ open_target_file(File) ->
 close_target_file() ->
     disk_log:close(?TARGET).
 
-open_tasks(Tasks) ->
-    lists:map(fun
-            ({disk_log, File}) -> disk_log_reader(File);
-            ({csv_log, File}) -> csv_log_reader(File)
-        end, Tasks).
-
-% reader returns a list of item + continuation function, which should be run
+get_log_processor(FileType) ->
+    AllProcessors = case application:get_env(event_replayer, log_processors) of
+        undefined -> [];
+        {ok, All} -> All
+    end,
+    case proplists:get_value(FileType, AllProcessors) of 
+        undefined -> throw("no registered processor for the log of type " 
+                ++ atom_to_list(FileType) 
+                ++ ". Specify the one in application env, see README");
+        V -> V
+    end.
+    
+% 'reader' function returns a list of item + continuation function, which should be run
 % every time for the next portion of items.
-% {[item()]
--type continuation_fun() :: fun(() -> eof | {continuation_fun(), [any()]}).
--spec disk_log_reader(File :: string()) -> {continuation_fun(), [any()]}.
--spec csv_log_reader(File :: string()) -> {continuation_fun(), [any()]}.
-
-disk_log_reader(File) -> 
-    disk_log:open([{name, File}, {file, File}, {mode, read_only}]),
-    Fun = disk_log_reader_fun(File, start),
-    Fun().
-
-disk_log_reader_fun(Name, Continuation) ->
-    fun() ->
-            case disk_log:chunk(Name, Continuation) of
-                {Continuation2, Items} -> 
-                    Requests = lists:map(fun disk_log_item_process/1, Items),
-                    {disk_log_reader_fun(Name, Continuation2), Requests};
-                eof -> disk_log:close(Name), eof;
-                Error -> throw({"Error while reading log", Name, Error})
-            end
-    end.
-
-csv_log_reader(File) -> 
-    {ok, FH} = file:open(File, [read, binary]),
-    Fun = csv_log_reader_fun({File, FH}, undefined),
-    Fun().
-
-            
-csv_log_reader_fun({Name, FH}, _Cont) ->
-    fun() ->
-            case io:get_line(FH, '') of
-                {error, Error} -> throw({"Error while reading log", Name, Error});
-                eof -> file:close(FH), eof;
-                "\n" -> csv_log_reader_fun({Name, FH}, undefined);
-                "\r\n" -> csv_log_reader_fun({Name, FH}, undefined);
-                Data -> 
-                    Items = string:tokens(strip(binary_to_list(Data)), [$;]),
-                    Request = csv_log_item_process(Items),
-                    %io:format("Request:~p~n", [Request]),
-                    {csv_log_reader_fun({Name, FH}, undefined), [Request]}
-            end
-    end.
-
--spec disk_log_item_process(any()) -> replayer_utils:request().
-disk_log_item_process(El) -> El.
-
-% see https://github.com/lkiesow/erlang-datetime/blob/master/datetime.erl for the help
--spec csv_log_item_process([string()]) -> replayer_utils:request().
-csv_log_item_process([DateTimeStr,Endpoint]) ->
-    {ok, [MonStr, Day, Year, Hour, Min, Sec, MS], []} =
-                            io_lib:fread("~3s ~d, ~d ~d:~d:~d.~d", DateTimeStr),
-    Mon = month(MonStr),
-    Secs  = calendar:datetime_to_gregorian_seconds({{Year,Mon,Day},{Hour,Min,Sec}}) - calendar:datetime_to_gregorian_seconds({{1970,1,1},{0,0,0}}),
-    Ts = {Secs div 1000000, Secs rem 1000000, MS},
-    Url = "http://api.aboutecho.com" ++ Endpoint,
-    {get, Ts, Url}.
-
-month("Jan") -> 1;
-month("Feb") -> 2;
-month("Mar") -> 3;
-month("Apr") -> 4;
-month("May") -> 5;
-month("Jun") -> 6;
-month("Jul") -> 7;
-month("Aug") -> 8;
-month("Sep") -> 9;
-month("Oct") -> 10;
-month("Nov") -> 11;
-month("Dec") -> 12.
-
-strip(Str) ->
-    lists:foldl(fun(Char, Acc) ->
-            string:strip(Acc, both, Char)
-        end, Str, [$\r, $\n]).
+open_tasks(Tasks) ->
+    lists:map(fun ({FileType, File}) -> 
+                Processor = get_log_processor(FileType),
+                Processor:reader(File)
+        end, Tasks).
 
 merge([]) -> ok;
 merge([{_,[R|_]} | _ ] = Handlers) -> 

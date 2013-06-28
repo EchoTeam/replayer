@@ -10,7 +10,9 @@
   {mod, { event_replayer_app, []}},
   {env, [
     {worker_pool_size, 5},
-    {disk_log, [{pattern, ["users_update_requests.*.log", "submit_requests.*.log"]}]},
-    {csv, [{pattern, ["search_requests.*.log"]}]}
+    {log_processors, [
+        {disk_log, disk_log_processor},
+        {csv_log,  csv_log_processor},
+        {http_log, http_log_processor} ]}
   ]}
  ]}.
