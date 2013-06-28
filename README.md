@@ -1,7 +1,8 @@
 Requests Replayer
 =================
 
-The idea is quite simple. First, you log all the incoming events. And then replay all the gathered events, at the same speed or some acceleration/deceleration.
+First, you log all the incoming http requests.
+Then you can replay all the gathered events, at the same speed or with some acceleration/deceleration.
 
 To replay the requests you need
 -------------------------------
@@ -9,11 +10,6 @@ To replay the requests you need
 * the cluster to repeat all the requests (with configurable option 'number of workers' on each node in the cluster)
 * the event_replayer application :)
 
-
- They should be in one of the predefined formats (disk_log, csv, http plaintax log)
-with the entries with the following type:
-** {Type :: get, Timestamp :: erlang:timestamp(), URL :: string()}
-** {Type :: post, Timestamp :: erlang:timestamp(), URL :: string(), Body :: binary()}
 
 Quick start
 -----------
