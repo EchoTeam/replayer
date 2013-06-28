@@ -15,7 +15,9 @@ Quick start
 -----------
 
 1. Start event_replayer application on all the nodes 
+```
     erlang> application:start(event_replayer).
+```
 
 2. Given all the logs in different formats, merge them together, sorting by the request time
 ```
@@ -31,22 +33,34 @@ Quick start
 
 3. Prepare the cluster
  * Change the ring (if you haven't specified it in the environment before the application start)
+```
     erlang> replayer_controller:change_ring(['node1@host1', 'node2@host2', 'node3@host3']).
+```
  * Specify the file with the requests
+```
     erlang> replayer_controller:change_tasks_file("/tmp/merged.log").
+```
  * Split all the requests between cluster nodes, send the requests to the local node files
+```
     erlang> replayer_controller:prepare().
+```
 
 4. Replay all the requests with the acceleration koefficient
+```
     erlang> replayer_controller:replay(10.0). % with 10 times acceleration
+```
 
 5. You could optionally change the pool size of worker processes on worker nodes (default pool size = 5)
+```
     erlang> replayer_controller:change_workers_num(100).
+```
 
 6. As all the preparations have been made before, you could go on replaying with different speed as long as you need to
+```
     erlang> replayer_controller:replay(10.0).
     erlang> replayer_controller:replay(20.0).
     erlang> replayer_controller:replay(50.0).
+```
 
 
 Behind the scene
