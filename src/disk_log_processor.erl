@@ -1,5 +1,5 @@
 -module(disk_log_processor).
--behaviour(log_processor).
+-behaviour(log_parser).
 
 -export([reader/1]).
 

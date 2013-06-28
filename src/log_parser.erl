@@ -1,4 +1,4 @@
--module(log_processor).
+-module(log_parser).
 -export([behaviour_info/1]).
 
 % reader function should be of type
