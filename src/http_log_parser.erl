@@ -1,4 +1,4 @@
--module(http_log_processor).
+-module(http_log_parser).
 -behaviour(log_parser).
 
 -export([reader/1]).

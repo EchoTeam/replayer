@@ -62,8 +62,8 @@ open_target_file(File) ->
 close_target_file() ->
     disk_log:close(?TARGET).
 
-get_log_processor(FileType) ->
-    AllProcessors = case application:get_env(event_replayer, log_processors) of
+get_log_parser(FileType) ->
+    AllProcessors = case application:get_env(event_replayer, log_parsers) of
         undefined -> [];
         {ok, All} -> All
     end,
@@ -78,7 +78,7 @@ get_log_processor(FileType) ->
 % every time for the next portion of items.
 open_tasks(Tasks) ->
     lists:map(fun ({FileType, File}) -> 
-                Processor = get_log_processor(FileType),
+                Processor = get_log_parser(FileType),
                 Processor:reader(File)
         end, Tasks).
 

@@ -1,4 +1,4 @@
--module(disk_log_processor).
+-module(disk_log_parser).
 -behaviour(log_parser).
 
 -export([reader/1]).

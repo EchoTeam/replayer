@@ -1,4 +1,4 @@
--module(csv_log_processor).
+-module(csv_log_parser).
 -behaviour(log_parser).
 
 -export([reader/1]).
