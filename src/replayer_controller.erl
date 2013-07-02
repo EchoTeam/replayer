@@ -7,13 +7,13 @@
 %% ------------------------------------------------------------------
 
 -export([
-    start_link/0,
-    start_link/1,
-    change_tasks_file/1,
     change_ring/1,
+    change_tasks_file/1,
     change_workers_num/1,
     prepare/0,
-    replay/1
+    replay/1,
+    start_link/0,
+    start_link/1
 ]).
 
 -export_type([

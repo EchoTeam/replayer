@@ -17,6 +17,8 @@ Quick start
 1. Start event_replayer application on all the nodes 
 ```
     erlang> application:start(event_replayer).
+    or
+    make run sname=snameX
 ```
 
 2. Given all the logs in different formats, merge them together, sorting by the request time
@@ -26,9 +28,11 @@ Quick start
                   {disk_log, "/test/submit_requests.log"},
                   {disk_log, "/test/users_update_requests.log"},
                   {disk_log, "/test/search_requests.log"},
-                  {http_log, "/test/http_requests.log"}
+                  {http_log, "/test/http_requests.log",
+                                  [{filter, {"appkey", "test-1.js-kit.com"}}]}
               ],
-              "/test/merged.log")
+              "/test/merged.log"
+          ).
 ```
 
 3. Prepare the cluster

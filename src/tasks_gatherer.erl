@@ -7,8 +7,9 @@
 
 -define(TARGET, merger_target).
 
--type task_type() :: disk_log | csv_log.
--type task() :: {Type :: task_type(), FileName :: string()}.
+-type task_type() :: disk_log | csv_log | http_log.
+-type option() :: {filter, {Parameter :: string(), Value :: string()}}.
+-type task() :: {Type :: task_type(), FileName :: string()} | {Type :: task_type(), FileName :: string(), Options :: [option()]}.
 
 % tasks_gatherer:merge_logs(
 %               [
@@ -16,17 +17,22 @@
 %                   {disk_log, "./test/users_requests.log"},
 %                   {disk_log, "./test/search_requests.log"},
 %                   {disk_log, "./test/mux_requests.log"},
-%                   {http_log, "/tmp/coser.1000.log"}
+%                   {http_log, "/tmp/coser.1000.log",
+%                                   [{filter, {"appkey", "test-1.js-kit.com"}}]}
 %               ],
 %               "./test/merged.log"
 %           ).
 -spec merge_logs(From :: [task()], To :: string()) -> ok | {error, Why :: string()}.
 merge_logs(Tasks, FileName) ->
-    Files = [ F || {_, F} <- Tasks ],
+    NormTasks = [case Task of
+                    {Type, File} -> {Type, File, []};
+                    V -> V
+                end || Task <- Tasks],
+    Files = [ F || {_, F, _} <- NormTasks ],
     io:format("The following logs are going to be merged into the ~p file:~n~p~n", [FileName, Files]),
     case confirm() of
         true -> 
-            try merge_logs_ll(Tasks, FileName) 
+            try merge_logs_ll(NormTasks, FileName)
             catch C:R ->
                 io:format("ERROR: failed due to error:~p~nStack:~p~n",
                                             [{C,R}, erlang:get_stacktrace()]),
@@ -77,12 +83,13 @@ get_log_parser(FileType) ->
 % 'reader' function returns a list of item + continuation function, which should be run
 % every time for the next portion of items.
 open_tasks(Tasks) ->
-    lists:map(fun ({FileType, File}) -> 
+    lists:map(fun ({FileType, File, Options}) ->
                 Processor = get_log_parser(FileType),
-                Processor:reader(File)
+                Processor:reader(File, Options)
         end, Tasks).
 
 merge([]) -> ok;
+merge([eof | Rest]) ->  merge(Rest);
 merge([{_,[R|_]} | _ ] = Handlers) -> 
     MinIdx = min_idx(
         1, 
@@ -97,7 +104,9 @@ min_idx(CurIdx, {_MinIdx, Min} = M, [{_, [R|_]} | Rest]) ->
     case replayer_utils:request_timestamp(R) of 
         Cur when Cur < Min -> min_idx(CurIdx+1, {CurIdx, Cur}, Rest);
         _ -> min_idx(CurIdx+1, M, Rest)
-    end.
+    end;
+min_idx(CurIdx, {_MinIdx, _Min} = M, [eof | Rest]) ->
+    min_idx(CurIdx+1, M, Rest).
 
 get_and_read_next(Idx, Handlers) ->
     {_, Request, NewHandlers} = lists:foldl(fun
@@ -113,6 +122,7 @@ get_and_read_next(Idx, Handlers) ->
                 _ -> [{ContFun,Rs}|Acc]
             end,
             {N+1, R, NewAcc};
+        (eof, {N, R, Acc}) -> {N, R, Acc};
         (El, {N, R, Acc}) -> {N+1, R, [El|Acc]}
     end, {1, undefined, []}, Handlers),
     {Request, NewHandlers}.

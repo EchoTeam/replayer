@@ -2,8 +2,18 @@
 
 -behaviour(application).
 
+-export([
+    start/0
+]).
+
 %% Application callbacks
--export([start/2, stop/1]).
+-export([
+    start/2,
+    stop/1
+]).
+
+start() ->
+    application:start(event_replayer).
 
 %% ===================================================================
 %% Application callbacks

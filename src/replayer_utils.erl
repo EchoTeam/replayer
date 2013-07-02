@@ -1,18 +1,22 @@
 -module(replayer_utils).
 
 -export([
-    request_timestamp/1,
-    set_request_timestamp/2,
-    request_url/1,
-    set_request_url/2,
+    query_params_of_request/1,
     request_body/1,
+    request_timestamp/1,
+    request_url/1,
     set_request_body/2,
+    set_request_timestamp/2,
+    set_request_url/2,
     with_chunks/4
 ]).
 
 -export_type([
     request/0
 ]).
+
+-include_lib("yaws/include/yaws.hrl").
+-include_lib("yaws/include/yaws_api.hrl").
 
 -type request() :: 
     {get,  Ts :: erlang:timestamp(), URL :: string()} |
@@ -43,3 +47,22 @@ with_chunks(LogName, Fun, {Cont, Chunks, _Badbytes}, Acc) ->
     NewAcc = Fun(Chunks, Acc),
     with_chunks(LogName, Fun, disk_log:chunk(LogName, Cont), NewAcc).
 
+-spec query_params_of_request(request()) -> {ok, [{Key :: string(), Value :: string()}]} | {error, Reason :: term()}.
+query_params_of_request({get, _, Url}) ->
+    query_params_of_request_ll(Url, undefined);
+query_params_of_request({post, _, Url, Body}) ->
+    query_params_of_request_ll(Url, Body).
+
+query_params_of_request_ll(Url, Body) ->
+    case http_uri:parse(Url) of
+        {ok, {_Scheme, _UserInfo, _Host, _Port, _Path, "?" ++ Query}} ->
+            GP = httpd:parse_query(Query),
+            Req = #http_request{method = 'POST'},
+            PP = yaws_api:parse_post(#arg{clidata = Body, req = Req}),
+            {ok, GP ++ PP};
+        {ok, {_Scheme, _UserInfo, _Host, _Port, _Path, _Query}} ->
+            Req = #http_request{method = 'POST'},
+            PP = yaws_api:parse_post(#arg{clidata = Body, req = Req}),
+            {ok, PP};
+        {error, Reason} -> {error, Reason}
+    end.
