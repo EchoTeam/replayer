@@ -29,7 +29,8 @@ start_link() ->
 init([]) ->
     {ok, { {one_for_one, 5, 10}, [
                 ?CHILD(replayer_controller),
-                ?CHILD(replayer_node_orchestrator)
+                ?CHILD(replayer_node_orchestrator),
+                ?CHILD(replayer_stats)
             ]} }.
 
 change_workers_num(WorkersNum) ->

@@ -34,8 +34,7 @@ merge_logs(Tasks, FileName) ->
         true -> 
             try merge_logs_ll(NormTasks, FileName)
             catch C:R ->
-                io:format("ERROR: failed due to error:~p~nStack:~p~n",
-                                            [{C,R}, erlang:get_stacktrace()]),
+                error_logger:error_msg("ERROR: failed due to error:~p~nStack:~p~n", [{C,R}, erlang:get_stacktrace()]),
                 {error, lists:flatten(io_lib:format("~p", [{C,R}]))}
             end;
         _ -> 

@@ -162,6 +162,8 @@ get_start_time(Delay) ->
     end,
     {NewMegaS, NewS, MicroS}.
 
+copy_tasks_to_ring(#state{ring = []}) ->
+    throw({error, empty_ring});
 copy_tasks_to_ring(State) ->
     Ring = State#state.ring,
     try 
@@ -177,36 +179,39 @@ copy_tasks_to_ring(State) ->
             {_, [Chunk], _} ->  replayer_utils:request_timestamp(Chunk);
             _ -> now() % doesn't matter as nothing to replay, just copy smth
         end,
-        io:format("FirstReqTs:~p~n", [FirstReqTs]),
 
-        execute_on_ring(State, replayer_node_orchestrator,
-                                    append_task, [{start_time, FirstReqTs}]),
-
-        replayer_utils:with_chunks(
+        RingSize = length(Ring),
+        {_, _, TasksCount} = replayer_utils:with_chunks(
                 ?MODULE,
                 fun(Chunks, Acc) -> copy_chunks(Chunks, Ring, Acc) end,
                 FirstChunk,
-                {1, length(Ring)}
-            )
+                {1, RingSize, 0}
+            ),
+
+        Meta = [
+            {start_time, FirstReqTs},
+            {tasks_count, TasksCount div RingSize}
+        ],
+        execute_on_ring(State, replayer_node_orchestrator, create_meta, [Meta])
     catch C:R -> 
-        io:format("Error occured while copying tasks to ring:~p~n", [{C,R}])
+        error_logger:error_msg("Error occured while copying tasks to ring:~p~n", [{C,R}])
     after
         disk_log:close(?MODULE)
     end,
     execute_on_ring(State, replayer_node_orchestrator, close_task_file, []),
     ok.
 
-copy_chunks(Chunks, Ring, {NodeNo, RingSize}) ->
-    NewNodeNo = lists:foldl(fun(Chunk, NodeNo_) ->
+copy_chunks(Chunks, Ring, {NodeNo, RingSize, TasksCount}) ->
+    {NewNodeNo,NewTasksCount} = lists:foldl(fun(Chunk, {NodeNo_,TasksCount_}) ->
         {NewNodeNo_, Node} = get_next_node(NodeNo_, RingSize, Ring),
         case rpc:call(Node, replayer_node_orchestrator, append_task, [Chunk]) of
             {badrpc, _} = Error -> throw({Node, Error});
             {error, _} = Error -> throw({Node, Error});
             _V -> nop
         end,
-        NewNodeNo_
-    end, NodeNo, Chunks),
-    {NewNodeNo, RingSize}.
+        {NewNodeNo_, TasksCount_ + 1}
+    end, {NodeNo, TasksCount}, Chunks),
+    {NewNodeNo, RingSize, NewTasksCount}.
 
 get_next_node(NodeNo, RingSize, Ring) ->
     Node = lists:nth(NodeNo, Ring),

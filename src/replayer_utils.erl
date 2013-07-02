@@ -43,7 +43,7 @@ request_body({post, _, _, B}) -> B.
 set_request_body({post, Ts, U, _}, B) -> {post, Ts, U, B}.
 
 
-with_chunks(_LogName, _Fun, eof, _Acc) -> nop;
+with_chunks(_LogName, _Fun, eof, Acc) -> Acc;
 with_chunks(LogName, Fun, {Cont, Chunks}, Acc) ->
     with_chunks(LogName, Fun, {Cont, Chunks, undefined}, Acc);
 with_chunks(LogName, Fun, {Cont, Chunks, _Badbytes}, Acc) ->

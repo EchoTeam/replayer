@@ -34,8 +34,8 @@ start_link(_Args) ->
     gen_server:start_link(?MODULE, [], []).
 
 request(Worker, Req) ->
-    gen_server:call(Worker, {request, Req}, ?TIMEOUT),
-    ok.
+    gen_server:call(Worker, {request, Req}, ?TIMEOUT).
+
 %% ------------------------------------------------------------------
 %% gen_server Function Definitions
 %% ------------------------------------------------------------------
@@ -53,9 +53,12 @@ handle_call({request, Req}, _From, State) ->
         [] -> [];
         _ -> list_to_binary(override_params(TS, binary_to_list(Body)))
     end,
-    _Res = lhttpc:request(OUrl, Method, [], OBody, infinity),
-    % TODO: check Res, at least code 20x
-    {reply, ok, State};
+    Res = case lhttpc:request(OUrl, Method, [], OBody, ?TIMEOUT) of
+        {ok, {{StatusCode, _ReasonPhrase}, _Hdrs, _ResponseBody}} ->
+            {ok, StatusCode};
+        {error, _Reason} = Error -> Error
+    end,
+    {reply, Res, State};
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
