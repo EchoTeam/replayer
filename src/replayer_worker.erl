@@ -44,12 +44,16 @@ init(_Args) ->
     {ok, _State = ok}.
 
 handle_call({request, Req}, _From, State) ->
-    io:format("~p (~p): requesting ~n", [self(), node()]),
-    {Method, Url, Body} = case Req of 
-        {get, _, U} -> {get, U, []};
-        {post, _, U, B} -> {post, U, B}
+    {Method, TS, Url, Body} = case Req of
+        {get, TS_, U} -> {get, TS_, U, []};
+        {post, TS_, U, B} -> {post, TS_, U, B}
     end,
-    _Res = lhttpc:request(Url, Method, [], Body, infinity),
+    OUrl = override_params(TS, Url),
+    OBody = case Body of
+        [] -> [];
+        _ -> list_to_binary(override_params(TS, binary_to_list(Body)))
+    end,
+    _Res = lhttpc:request(OUrl, Method, [], OBody, infinity),
     % TODO: check Res, at least code 20x
     {reply, ok, State};
 handle_call(_Request, _From, State) ->
@@ -71,3 +75,14 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+override_params(ReqTS, Str) ->
+    case re:run(Str, "^(.+)([?|&])since=([0-9]+.[0-9]+)(.*)$",
+                                            [{capture, [1,2,3,4], list}]) of
+        {match, [Prefix, Delim, RTS, Suffix]} ->
+            ParamTS = replayer_utils:ts_of_string(RTS),
+            Diff = timer:now_diff(ReqTS, ParamTS),
+            TS = replayer_utils:unixtimestamp() - Diff/1000000,
+            [S] = io_lib:format("~.6f", [TS]),
+            Prefix ++ Delim ++ "since=" ++ S ++ Suffix;
+        _ -> Str
+    end.

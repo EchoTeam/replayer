@@ -78,13 +78,11 @@ replay_requests(Reqs, RealStartTs, LogStartTs, Speed) ->
         case RealDiffTs - trunc(LogDiffTs/Speed) of
             Diff when Diff < ?SLEEP_THRESHOLD ->
                 ToSleep = -Diff div 1000,
-                io:format("sleep ~p before request~n", [ToSleep]),
                 timer:sleep(ToSleep),
                 request(Req);
             Diff when Diff < ?EXIT_THRESHOLD ->
                 request(Req);
             _ ->
-                io:format("res3~n"),
                 error(too_slow_replayer)
         end
     end, Reqs),
@@ -92,7 +90,8 @@ replay_requests(Reqs, RealStartTs, LogStartTs, Speed) ->
 
 request(Req) ->
     case poolboy:checkout(?MODULE, false) of
-        full -> error(not_enough_workers);
+        Error when Error == full; Error == overflow ->%error(not_enough_workers)
+            io:format("Not enough workers~n");
         Worker -> 
             proc_lib:spawn(fun() ->
                 try 

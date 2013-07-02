@@ -59,11 +59,7 @@ parse(FH) ->
 
 parse_ts(Str) ->
     case re:run(Str, "^[0-9]\+\.[0-9]\+$", [{capture, [0], list}]) of
-        {match, [TS]} ->
-            {TsDouble, []} = string:to_float(TS),
-            S = trunc(TsDouble),
-            MicroS = trunc(1000000 * (TsDouble - S)),
-            {match, {S div 1000000, S rem 1000000, MicroS}};
+        {match, [TS]} -> {match, replayer_utils:ts_of_string(TS)};
         _ -> nomatch
     end.
 

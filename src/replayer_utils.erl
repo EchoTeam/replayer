@@ -8,6 +8,9 @@
     set_request_body/2,
     set_request_timestamp/2,
     set_request_url/2,
+    ts_of_string/1,
+    unixtimestamp/0,
+    unixtimestamp/1,
     with_chunks/4
 ]).
 
@@ -66,3 +69,14 @@ query_params_of_request_ll(Url, Body) ->
             {ok, PP};
         {error, Reason} -> {error, Reason}
     end.
+
+ts_of_string(S) ->
+    {Double, []} = string:to_float(S),
+    Int = trunc(Double),
+    MicroS = trunc(1000000 * (Double - Int)),
+    {Int div 1000000, Int rem 1000000, MicroS}.
+
+unixtimestamp() ->
+    unixtimestamp(os:timestamp()).
+
+unixtimestamp({M, S, U}) -> M*1000000 + S + U/1000000.
