@@ -71,7 +71,10 @@ query_params_of_request_ll(Url, Body) ->
     end.
 
 ts_of_string(S) ->
-    {Double, []} = string:to_float(S),
+    {Double, []} = case string:to_float(S) of
+        {error, no_float} -> string:to_integer(S);
+        V -> V
+    end,
     Int = trunc(Double),
     MicroS = trunc(1000000 * (Double - Int)),
     {Int div 1000000, Int rem 1000000, MicroS}.

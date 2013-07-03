@@ -1,0 +1,110 @@
+<html lang="en">
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Event Replayer">
+    <link href="/static/bootstrap/css/bootstrap.min.css" rel="stylesheet" media="screen">
+    <title>Event Replayer</title>
+    <script src="/static/jquery.min.js"></script>
+    <script src="/static/bootstrap/js/bootstrap.min.js"></script>
+    <script src="/static/event_replayer.js"></script>
+    <style type="text/css">
+        .nav-tabs.nav-stacked > .active > a,
+        .nav-tabs.nav-stacked > .active > a:hover,
+        .nav-tabs.nav-stacked > .active > a:focus {
+          color: #ffffff;
+          text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.2);
+          background-color: #0088cc;
+        }
+
+table .header {
+  cursor: pointer;
+}
+table {
+  cursor: pointer;
+}
+table .header:after {
+  content: "";
+  float: right;
+  margin-top: 7px;
+  border-width: 0 4px 4px;
+  border-style: solid;
+  border-color: #000 transparent;
+  visibility: hidden;
+}
+table .headerSortUp, table .headerSortDown {
+  background-color: rgba(141, 192, 219, 0.25);
+  text-shadow: 0 1px 1px rgba(255, 255, 255, 0.75);
+}
+table .header:hover:after {
+  visibility: visible;
+}
+table .headerSortDown:after, table .headerSortDown:hover:after {
+  visibility: visible;
+  filter: alpha(opacity=60);
+  -khtml-opacity: 0.6;
+  -moz-opacity: 0.6;
+  opacity: 0.6;
+}
+table .headerSortUp:after {
+  border-bottom: none;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 4px solid #000;
+  visibility: visible;
+  -webkit-box-shadow: none;
+  -moz-box-shadow: none;
+  box-shadow: none;
+  filter: alpha(opacity=60);
+  -khtml-opacity: 0.6;
+  -moz-opacity: 0.6;
+  opacity: 0.6;
+}
+
+    </style>
+  </head>
+
+  <body>
+    <div class="navbar navbar-fixed-top">
+      <div class="navbar-inner">
+        <div class="container">
+          <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+            <span class="icon-bar"></span>
+          </a>
+          <span class="brand">Event Replayer</span>
+          <div class="nav-collapse">
+            <p class="navbar-text pull-right">Connection status: <span class="label label-important" id="connectionStatus">disconnected</span></p>
+          </div><!--/.nav-collapse -->
+        </div>
+      </div>
+    </div>
+
+    <div class="container" style="margin-top:50px;">
+            <h3>Overall</h3>
+            <div class="well" id="overallProgress">
+            </div>
+            <div class="well" id="tasksFile">
+            </div>
+            <div class="well" id="ringNodes">
+            </div>
+            <div class="well" id="nodeStats">
+            </div>
+    </div>
+
+    <!-- ########## Show message dialog ########## -->
+    <div class="modal hide fade" id="messageDialog">
+        <div class="modal-header">
+            <a class="close" data-dismiss="modal">×</a>
+            <h3 id="messageDialogHeader"></h3>
+        </div>
+        <div class="modal-body" id="messageDialogBodyContainer">
+            <p id="messageDialogBody"></p>
+        </div>
+        <div class="modal-footer">
+            <a href="#" class="btn" data-dismiss="modal">Close</a>
+        </div>
+    </div>
+  </body>
+</html> 

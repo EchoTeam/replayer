@@ -117,6 +117,8 @@ request(Req) ->
                         {error, _} ->
                             replayer_stats:bump(reply_errors)
                     end
+                catch _:_ ->
+                    replayer_stats:bump(tasks_failed)
                 after
                     ok = poolboy:checkin(?MODULE, Worker)
                 end

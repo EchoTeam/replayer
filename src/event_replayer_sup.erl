@@ -30,7 +30,8 @@ init([]) ->
     {ok, { {one_for_one, 5, 10}, [
                 ?CHILD(replayer_controller),
                 ?CHILD(replayer_node_orchestrator),
-                ?CHILD(replayer_stats)
+                ?CHILD(replayer_stats),
+                ?CHILD(replayer_web_messges)
             ]} }.
 
 change_workers_num(WorkersNum) ->

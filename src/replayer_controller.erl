@@ -10,6 +10,9 @@
     change_ring/1,
     change_tasks_file/1,
     change_workers_num/1,
+    execute_on_ring/3,
+    get_state/0,
+    get_stats/0,
     prepare/0,
     replay/1,
     start_link/0,
@@ -62,12 +65,39 @@ change_ring(Ring) ->
 change_workers_num(WorkersNum) ->
     gen_server:call(?MODULE, {change_workers_num, WorkersNum}, infinity).
 
+execute_on_ring(M, F, A) ->
+    gen_server:call(?MODULE, {execute_on_ring, {M, F, A}}, infinity).
+
+get_state() ->
+    gen_server:call(?MODULE, get_state, infinity).
+
+get_stats() ->
+    gen_server:call(?MODULE, get_stats, infinity).
+
 prepare() ->
     gen_server:call(?MODULE, prepare, infinity).
 
 -spec replay(Speed :: float()) -> ok | {error, any()}.
 replay(Speed) ->
-    gen_server:call(?MODULE, {replay, Speed}, infinity).
+    State = get_state(),
+    case State#state.ring == [] of
+        true -> {error, "empty ring"};
+        false ->
+            StartTs = get_start_time(1),
+            case execute_on_ring(State, replayer_node_orchestrator, replay,
+                                                            [StartTs, Speed]) of
+                {error, _} = Error -> Error;
+                RingRes ->
+                    Errors = lists:filter(fun
+                                            ({_Node, ok}) -> false;
+                                            (_) -> true
+                                        end, RingRes),
+                    case Errors of
+                        [] -> ok;
+                        V -> {error, V}
+                    end
+            end
+    end.
 
 
 %% ------------------------------------------------------------------
@@ -113,6 +143,14 @@ handle_call({change_workers_num, WorkersNum}, _From, State) ->
         V -> {error, V}
     end,
     {reply, Res, State};
+handle_call({execute_on_ring, {M, F, A}}, _From, State) ->
+    RingRes = execute_on_ring(State, M, F, A),
+    {reply, RingRes, State};
+handle_call(get_state, _From, State) ->
+    {reply, State, State};
+handle_call(get_stats, _From, #state{ring = Ring, tasks_file = File} = State) ->
+    {ok, WorkersNum} = application:get_env(event_replayer, worker_pool_size),
+    {reply, {Ring, WorkersNum, File}, State};
 handle_call(prepare, _From, State) ->
     Res = case disk_log:open([
                                 {name, ?MODULE},
@@ -120,18 +158,6 @@ handle_call(prepare, _From, State) ->
                                 {mode, read_only}]) of
         {error, _} = E -> E;
         _ -> copy_tasks_to_ring(State)
-    end,
-    {reply, Res, State};
-handle_call({replay, _Speed}, _From, #state{ring=[]} = State) ->
-    {reply, {error, "empty ring"}, State};
-handle_call({replay, Speed}, _From, State) ->
-    StartTs = get_start_time(1),
-    RingRes = execute_on_ring(State, replayer_node_orchestrator,
-                                                    replay, [StartTs, Speed]),
-    Errors = lists:filter(fun({_Node, ok}) -> false; (_) -> true end, RingRes),
-    Res = case Errors of
-        [] -> ok;
-        V -> {error, V}
     end,
     {reply, Res, State};
 handle_call(_Request, _From, State) ->

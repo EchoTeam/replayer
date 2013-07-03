@@ -25,7 +25,46 @@ start(_StartType, _StartArgs) ->
     ok = application:start(public_key),
     ok = application:start(ssl),
     ok = application:start(lhttpc),
+    ok = application:start(mimetypes),
+    ok = application:start(jiffy),
+    ok = application:start(ranch),
+    ok = application:start(cowboy),
+    start_web_server(),
     event_replayer_sup:start_link().
 
 stop(_State) ->
+    ok.
+
+start_web_server() ->
+    WWWRootDir = case application:get_env(www_dir) of
+        undefined -> "./www";
+        {ok, WWWRootDir_} -> WWWRootDir_
+    end,
+    Dispatch = cowboy_router:compile([
+        {'_', [
+                {"/", replayer_web_index, []},
+                {"/websocket", replayer_web_socket, []},
+                {"/static/[...]", cowboy_static, [
+                        {directory, filename:join([WWWRootDir, "static"])},
+                        {mimetypes, {fun mimetypes:path_to_mimes/2, default}}
+                    ]}
+            ]}
+    ]),
+    Port = case application:get_env(web_port) of
+        undefined -> "8080";
+        {ok, Port_} -> Port_
+    end,
+    {ok, _} = cowboy:start_http(http, 100, [{port, list_to_integer(Port)}],
+                    [
+                        {middlewares, [
+                                            cowboy_router,
+                                            cowboy_cookie_session,
+                                            cowboy_handler
+                                        ]},
+                        {env, [
+                                {session_opts,
+                                    {<<"sess">>,<<"echo!82_">>,3600,<<"/">>}},
+                                {dispatch, Dispatch}
+                            ]}
+                    ]),
     ok.
