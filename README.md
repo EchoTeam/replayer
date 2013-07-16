@@ -31,7 +31,8 @@ Quick start
                   {http_log, "/test/http_requests.log",
                                   [{filter, {"appkey", "test-1.js-kit.com"}}]}
               ],
-              "/test/merged.log"
+              "/test/merged.log",
+              [{change_host, "foo.bar"}]
           ).
 ```
 

@@ -2,13 +2,14 @@
 
 -export([
     merge_logs/2,
-    log_map/3
+    merge_logs/3,
+    traverse_task_files/3
 ]).
 
 -define(TARGET, merger_target).
 
 -type task_type() :: disk_log | csv_log | http_log.
--type option() :: {filter, {Parameter :: string(), Value :: string()}}.
+-type option() :: {filter, {Parameter :: string(), Value :: string()}} | {change_host, Host :: string()}.
 -type task() :: {Type :: task_type(), FileName :: string()} | {Type :: task_type(), FileName :: string(), Options :: [option()]}.
 
 % tasks_gatherer:merge_logs(
@@ -20,10 +21,14 @@
 %                   {http_log, "/tmp/coser.1000.log",
 %                                   [{filter, {"appkey", "test-1.js-kit.com"}}]}
 %               ],
-%               "./test/merged.log"
+%               "./test/merged.log",
+%               [{change_host, "foo.bar"}]
 %           ).
--spec merge_logs(From :: [task()], To :: string()) -> ok | {error, Why :: string()}.
+-spec merge_logs(From :: [task()], To :: string(), Options :: [option()]) -> ok | {error, Why :: string()}.
 merge_logs(Tasks, FileName) ->
+	merge_logs(Tasks, FileName, []).
+
+merge_logs(Tasks, FileName, Options) ->
     NormTasks = [case Task of
                     {Type, File} -> {Type, File, []};
                     V -> V
@@ -32,7 +37,7 @@ merge_logs(Tasks, FileName) ->
     io:format("The following logs are going to be merged into the ~p file:~n~p~n", [FileName, Files]),
     case confirm() of
         true -> 
-            try merge_logs_ll(NormTasks, FileName)
+            try merge_logs_ll(NormTasks, FileName, Options)
             catch C:R ->
                 error_logger:error_msg("ERROR: failed due to error:~p~nStack:~p~n", [{C,R}, erlang:get_stacktrace()]),
                 {error, lists:flatten(io_lib:format("~p", [{C,R}]))}
@@ -48,12 +53,16 @@ confirm() ->
         {ok, [_]} -> false
     end.
 
-merge_logs_ll(Tasks, FileName) ->
-    OpenedTasks = open_tasks(Tasks),
+merge_logs_ll(Tasks, FileName, Options) ->
     ok = open_target_file(FileName),
-    merge(OpenedTasks),
+    traverse_task_files(Tasks, fun merge/2, Options),
     close_target_file(),
     ok.
+
+merge(Request, Options) ->
+    NewRequest = maybe_override_request(Request, Options),
+    disk_log:log(?TARGET, NewRequest),
+    Options.
 
 open_target_file(File) ->
     case disk_log:open([{name, ?TARGET}, {file, File}]) of
@@ -87,16 +96,21 @@ open_tasks(Tasks) ->
                 Processor:reader(File, Options)
         end, Tasks).
 
-merge([]) -> ok;
-merge([eof | Rest]) ->  merge(Rest);
-merge([{_,[R|_]} | _ ] = Handlers) -> 
+traverse_task_files(Tasks, Fun, Acc) ->
+    OpenedTasks = open_tasks(Tasks),
+    traverse_task_files_ll(OpenedTasks, Fun, Acc).
+
+traverse_task_files_ll([], _Fun, Acc) -> Acc;
+traverse_task_files_ll([eof | Rest], Fun, Acc) ->
+    traverse_task_files_ll(Rest, Fun, Acc);
+traverse_task_files_ll([{_,[R|_]} | _ ] = Handlers, Fun, Acc) -> 
     MinIdx = min_idx(
         1, 
         {1, replayer_utils:request_timestamp(R)}, 
         Handlers),
     {Request, NewHandlers} = get_and_read_next(MinIdx, Handlers),
-    disk_log:log(?TARGET, Request),
-    merge(NewHandlers).
+    NewAcc = Fun(Request, Acc),
+    traverse_task_files_ll(NewHandlers, Fun, NewAcc).
 
 min_idx(_CurIdx, {MinIdx, _Min}, []) -> MinIdx;
 min_idx(CurIdx, {_MinIdx, Min} = M, [{_, [R|_]} | Rest]) ->
@@ -126,19 +140,19 @@ get_and_read_next(Idx, Handlers) ->
     end, {1, undefined, []}, Handlers),
     {Request, NewHandlers}.
 
-log_map_walk(LogFrom, LogTo, Cont, Fun) ->
-    case disk_log:chunk(LogFrom, Cont, 1) of 
-        {Cont2, [El_]} -> 
-            El = Fun(El_),
-            disk_log:log(LogTo, El), 
-            log_map_walk(LogFrom, LogTo, Cont2, Fun);
-        eof -> ok
+maybe_override_request(Request, Options) ->
+    case proplists:get_value(change_host, Options) of
+        undefined -> Request;
+        NewHost -> change_request_host(Request, NewHost)
     end.
 
-log_map(LogFrom, LogTo, Fun) ->
-    disk_log:open([{name, LogFrom}, {file, LogFrom}, {mode, read_only}]),
-    disk_log:open([{name, LogTo}, {file, LogTo}]),
-    log_map_walk(LogFrom, LogTo, start, Fun),
-    disk_log:close(LogFrom),
-    disk_log:close(LogTo),
-    ok.
+change_request_host({get, TS, URL}, NewHost) ->
+    {get, TS, change_url_host(URL, NewHost)};
+change_request_host({post, TS, URL, Body}, NewHost) ->
+    {post, TS, change_url_host(URL, NewHost), Body}.
+
+change_url_host(URL, NewHost) ->
+    case re:run(URL, "^(https?://)([^/]*)(/.*)$", [{capture, [1,2,3], list}]) of
+        {match, [Proto, _Host, Rest]} -> Proto ++ NewHost ++ Rest;
+        _ -> URL
+    end.
