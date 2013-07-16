@@ -14,7 +14,7 @@
 -define(WORKER, replayer_worker).
 
 -define(SLEEP_THRESHOLD, -1000). % in microsec, = 1ms
--define(EXIT_THRESHOLD, 1000000). % in microsec = 1sec
+-define(EXIT_THRESHOLD, 10000000). % in microsec = 10sec
 
 disk_log_file() ->
     "/tmp/" ++ atom_to_list(?MODULE) ++ "." ++ atom_to_list(node()) ++ ".disk_log".

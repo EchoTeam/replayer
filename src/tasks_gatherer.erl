@@ -3,6 +3,7 @@
 -export([
     merge_logs/2,
     merge_logs/3,
+    test/0,
     traverse_task_files/3
 ]).
 
@@ -156,3 +157,14 @@ change_url_host(URL, NewHost) ->
         {match, [Proto, _Host, Rest]} -> Proto ++ NewHost ++ Rest;
         _ -> URL
     end.
+
+test() ->
+    SampleData = test_log_parser:test_sample_data(),
+    Tasks = [
+        {test_log, 1, []},
+        {test_log, 2, []},
+        {test_log, 3, []}
+    ],
+    T = fun(Req, Acc) -> [Req | Acc] end,
+    TraversedData = traverse_task_files(Tasks, T, []),
+    SampleData = lists:reverse(TraversedData).
