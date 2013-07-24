@@ -96,8 +96,10 @@ replay_requests(Reqs, RealStartTs, LogStartTs, Speed) ->
                 request(Req);
             Diff when Diff < ?EXIT_THRESHOLD ->
                 request(Req);
-            _ ->
-                error(too_slow_replayer)
+            Diff ->
+                error_logger:error_msg("Too slow replayer: ~p (~p)~n",
+                                                        [element(3,Req), Diff]),
+		request(Req)
         end
     end, Reqs),
     ok.
