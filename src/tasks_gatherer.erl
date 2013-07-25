@@ -136,7 +136,7 @@ get_and_read_next(Idx, Handlers) ->
                 _ -> [{ContFun,Rs}|Acc]
             end,
             {N+1, R, NewAcc};
-        (eof, {N, R, Acc}) -> {N, R, Acc};
+        (eof, {N, R, Acc}) -> {N+1, R, Acc};
         (El, {N, R, Acc}) -> {N+1, R, [El|Acc]}
     end, {1, undefined, []}, Handlers),
     {Request, NewHandlers}.
@@ -161,9 +161,14 @@ change_url_host(URL, NewHost) ->
 test() ->
     SampleData = test_log_parser:test_sample_data(),
     Tasks = [
-        {test_log, 1, []},
-        {test_log, 2, []},
-        {test_log, 3, []}
+        {test_log, empty, [{filter, {"filter0", "true"}}]},
+        {test_log, 1, [{filter, {"filter1", "true"}}]},
+        {test_log, empty, [{filter, {"filter0", "true"}}]},
+        {test_log, 2, [{filter, {"filter2", "true"}}]},
+        {test_log, empty, [{filter, {"filter0", "true"}}]},
+        {test_log, 3, [{filter, {"filter3", "true"}}]},
+        {test_log, empty, [{filter, {"filter0", "true"}}]},
+        {test_log, 4, [{filter, {"filter4", "true"}}]}
     ],
     T = fun(Req, Acc) -> [Req | Acc] end,
     TraversedData = traverse_task_files(Tasks, T, []),
