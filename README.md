@@ -21,15 +21,15 @@ Quick start
     make run
 ```
 
-2. Given all the logs in different formats, merge them together, sorting by the request time
+2. Given all the logs in different formats, merge them together into a unified format file, sorting by the request time
 ```
     erlang> tasks_gatherer:merge_logs(
               [
+                  {http_log, "/test/http_requests.log",
+                                  [{filter, {"appkey", "test-1.js-kit.com"}}]},
                   {disk_log, "/test/submit_requests.log"},
                   {disk_log, "/test/users_update_requests.log"},
-                  {disk_log, "/test/search_requests.log"},
-                  {http_log, "/test/http_requests.log",
-                                  [{filter, {"appkey", "test-1.js-kit.com"}}]}
+                  {disk_log, "/test/search_requests.log"}
               ],
               "/test/merged.log",
               [{change_host, "foo.bar"}]
