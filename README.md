@@ -18,7 +18,7 @@ Quick start
 ```
     erlang> application:start(event_replayer).
     or
-    make run sname=snameX
+    make run
 ```
 
 2. Given all the logs in different formats, merge them together, sorting by the request time
