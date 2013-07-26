@@ -1,3 +1,7 @@
+
+# Default erlang node name is to be replayer@`hostname -s`
+sname ?= replayer
+
 .PHONY: deps
 
 all: deps compile

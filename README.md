@@ -1,13 +1,13 @@
 Requests Replayer
 =================
 
-First, you log all the incoming http requests.
-Then you can replay all the gathered events, at the same speed or with some acceleration/deceleration.
+The replayer can re-issue the previously captured set of HTTP requests
+with adjustable request rate relative to the captured rate.
 
 To replay the requests you need
 -------------------------------
-* the requests themselves.
-* the cluster to repeat all the requests (with configurable option 'number of workers' on each node in the cluster)
+* the requests themselves,
+* the cluster to repeat all the requests (with configurable option 'number of workers' on each node in the cluster),
 * the event_replayer application :)
 
 
@@ -18,18 +18,18 @@ Quick start
 ```
     erlang> application:start(event_replayer).
     or
-    make run sname=snameX
+    make run
 ```
 
-2. Given all the logs in different formats, merge them together, sorting by the request time
+2. Given all the logs in different formats, merge them together into a unified format file, sorting by the request time
 ```
     erlang> tasks_gatherer:merge_logs(
               [
+                  {http_log, "/test/http_requests.log",
+                                  [{filter, {"appkey", "test-1.js-kit.com"}}]},
                   {disk_log, "/test/submit_requests.log"},
                   {disk_log, "/test/users_update_requests.log"},
-                  {disk_log, "/test/search_requests.log"},
-                  {http_log, "/test/http_requests.log",
-                                  [{filter, {"appkey", "test-1.js-kit.com"}}]}
+                  {disk_log, "/test/search_requests.log"}
               ],
               "/test/merged.log",
               [{change_host, "foo.bar"}]
@@ -50,7 +50,7 @@ Quick start
     erlang> replayer_controller:prepare().
 ```
 
-4. Replay all the requests with the acceleration koefficient
+4. Replay all the requests with the acceleration coefficient
 ```
     erlang> replayer_controller:replay(10.0). % with 10 times acceleration
 ```
@@ -84,7 +84,7 @@ You could have your own log format, and to use it you should specify your own pa
 ```
 
 
-Your parser should have a **log_parser** behaiour, i.e. implement the **reader** function:
+Your parser should have a **log_parser** behaviour, i.e. implement the **reader** function:
 ```
     -type request() ::
         {get,  Ts :: erlang:timestamp(), URL :: string()} |
