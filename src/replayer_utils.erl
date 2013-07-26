@@ -57,13 +57,13 @@ query_params_of_request({post, _, Url, Body}) ->
     query_params_of_request_ll(Url, Body).
 
 query_params_of_request_ll(Url, Body) ->
-    case http_uri:parse(Url) of
-        {ok, {_Scheme, _UserInfo, _Host, _Port, _Path, "?" ++ Query}} ->
-            GP = httpd:parse_query(Query),
+    case yaws_api:parse_url(Url) of
+        {_, _, _, _, _, Query} when Query /= [] ->
+            GP = yaws_api:parse_query(#arg{querydata = Query}),
             Req = #http_request{method = 'POST'},
             PP = yaws_api:parse_post(#arg{clidata = Body, req = Req}),
             {ok, GP ++ PP};
-        {ok, {_Scheme, _UserInfo, _Host, _Port, _Path, _Query}} ->
+        {_, _, _, _, _, _} ->
             Req = #http_request{method = 'POST'},
             PP = yaws_api:parse_post(#arg{clidata = Body, req = Req}),
             {ok, PP};
