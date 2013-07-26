@@ -14,7 +14,11 @@
     get_state/0,
     get_stats/0,
     prepare/0,
+    set_replay_speed/1,
+    replay/0,
     replay/1,
+    simple_play/1,
+    simple_play/2,
     start_link/0,
     start_link/1
 ]).
@@ -39,7 +43,8 @@
 -record(state, {
         handler = ?MODULE       :: module(),  % for eunit tests
         tasks_file = undefined  :: [string()],
-        ring = []               :: [node()]
+        ring = []               :: [node()],
+        replay_speed = 1.0      :: float()
 }).
 
 -type task_type() :: disk_log | csv_log.
@@ -77,9 +82,19 @@ get_stats() ->
 prepare() ->
     gen_server:call(?MODULE, prepare, infinity).
 
+-spec set_replay_speed(Speed :: float()) -> ok.
+set_replay_speed(Speed) when is_float(Speed) ->
+    gen_server:call(?MODULE, {set_replay_speed, Speed}, infinity).
+
 -spec replay(Speed :: float()) -> ok | {error, any()}.
 replay(Speed) ->
+    set_replay_speed(Speed),
+    replay().
+
+-spec replay() -> ok | {error, any()}.
+replay() ->
     State = get_state(),
+    Speed = State#state.replay_speed,
     case State#state.ring == [] of
         true -> {error, "empty ring"};
         false ->
@@ -98,6 +113,17 @@ replay(Speed) ->
                     end
             end
     end.
+
+simple_play(Filename, Speed) ->
+    set_replay_speed(Speed),
+    simple_play(Filename).
+
+simple_play(Filename) ->
+    State = get_state(),
+    [change_ring([node()]) || State#state.ring == []],
+    change_tasks_file(Filename),
+    prepare(),
+    replay().
 
 
 %% ------------------------------------------------------------------
@@ -148,6 +174,8 @@ handle_call({execute_on_ring, {M, F, A}}, _From, State) ->
     {reply, RingRes, State};
 handle_call(get_state, _From, State) ->
     {reply, State, State};
+handle_call({set_replay_speed, Speed}, _From, State) ->
+    {reply, ok, State#state{replay_speed = Speed}};
 handle_call(get_stats, _From, #state{ring = Ring, tasks_file = File} = State) ->
     {ok, WorkersNum} = application:get_env(event_replayer, worker_pool_size),
     {reply, {Ring, WorkersNum, File}, State};

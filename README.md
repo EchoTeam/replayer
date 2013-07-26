@@ -50,17 +50,18 @@ Quick start
     erlang> replayer_controller:prepare().
 ```
 
-4. Replay all the requests with the acceleration coefficient
+4. Replay all the requests with the pre-set speed.
 ```
-    erlang> replayer_controller:replay(10.0). % with 10 times acceleration
+    erlang> replayer_controller:replay().
 ```
 
-5. You could optionally change the pool size of worker processes on worker nodes (default pool size = 5)
+5. You could optionally change the pool size of worker processes on worker nodes (default pool size = 5) or the replay speed (default speed corresponds to capture rate).
 ```
     erlang> replayer_controller:change_workers_num(100).
+    erlang> replayer_controller:set_replay_speed(10.0).  % 10x acceleration
 ```
 
-6. As all the preparations have been made before, you could go on replaying with different speed as long as you need to
+6. As all the preparations have been made before, you could continue replaying with different request rates.
 ```
     erlang> replayer_controller:replay(10.0).
     erlang> replayer_controller:replay(20.0).
