@@ -18,7 +18,7 @@
 -spec reader(File :: string(), Options :: [option()]) ->
                             {continuation_fun(), [replayer_utils:request()]}.
 reader(File, Options) ->
-    {ok, FH} = file:open(File, [read]),
+    {ok, FH} = file:open(File, [raw, {read_ahead, 1024 * 1024 * 10}]),
     Fun = reader_fun(#state{
                         file_name = File,
                         file_handle = FH,
@@ -43,10 +43,10 @@ reader_fun(#state{file_name = Name, file_handle = FH} = State) ->
 
 -spec parse(FH :: file:io_device()) -> eof | replayer_utils:request() .
 parse(FH) ->
-    case io:get_line(FH, '') of
+    case file:read_line(FH) of
         {error, Error} -> throw({error, Error});
         eof -> eof;
-        Str_ ->
+        {ok, Str_} ->
             case strip(Str_) of
                 "" -> parse(FH);
                 Str ->
@@ -88,10 +88,10 @@ parse_request(FH, TS) ->
     end.
 
 parse_path(FH) ->
-    case io:get_line(FH, '') of
+    case file:read_line(FH) of
         {error, Error} -> throw({error, Error});
         eof -> eof;
-        Str_ -> 
+        {ok, Str_} -> 
             Str = strip(Str_),
             case re:run(Str, "^\(POST\|GET\) \([^ ]\+\) .*",
                                                 [{capture, [1, 2], list}]) of
@@ -104,20 +104,22 @@ parse_headers(FH) ->
     parse_headers(FH, []).
 
 parse_headers(FH, Acc) ->
-    case io:get_line(FH, '') of
+    case file:read_line(FH) of
         {error, Error} -> throw({error, Error});
         eof -> eof;
-        Str_ ->
+        {ok, [C|_] = Str_} when C == $h; C == $H; C == $C ->
             case strip(Str_) of
                 "" -> {match, Acc};
                 Str -> parse_headers(FH, [parse_header(Str) | Acc])
-            end
+            end;
+        {ok, [10]} -> {match, Acc};
+        {ok, _} -> parse_headers(FH, Acc)
     end.
 
 parse_header(Str) ->
     {Header, Value} = lists:splitwith(fun(E) -> E /= $: end, Str),
     NValue = case Value of
-        ":" ++ V -> V;
+        ": " ++ V -> V;
         _ -> Value
     end,
     Strip = fun(S) -> string:strip(strip(S)) end,
@@ -146,10 +148,7 @@ assemble_request(Type, TS, Path, Headers, Body) ->
         "POST" -> {post, TS, Url, Body}
     end.
 
-strip(Str) ->
-    lists:foldl(fun(Char, Acc) ->
-            string:strip(Acc, both, Char)
-        end, Str, [$\r, $\n]).
+strip(Str) -> Str -- [$\r, $\n].
 
 maybe_filter_request(Request, Options) ->
     case proplists:get_value(filter, Options) of
