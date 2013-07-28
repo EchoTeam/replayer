@@ -123,6 +123,7 @@ simple_play(Filename) ->
     [change_ring([node()]) || State#state.ring == []],
     change_tasks_file(Filename),
     prepare(),
+    change_workers_num(100),
     replay().
 
 
