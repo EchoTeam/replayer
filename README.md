@@ -87,10 +87,6 @@ You could have your own log format, and to use it you should specify your own pa
 
 Your parser should have a **log_parser** behaviour, i.e. implement the **reader** function:
 ```
-    -type request() ::
-        {get,  Ts :: erlang:timestamp(), URL :: string()} |
-        {post, Ts :: erlang:timestamp(), URL :: string(), Body :: binary()}.
-
     -type continuation_fun() :: fun(() -> eof | {continuation_fun(), [request()]}).
-    -spec reader(File :: string()) -> {continuation_fun(), [request()]}.
+    -spec reader(File :: string(), Options :: [option()]) -> {continuation_fun(), [request()]}.
 ```
