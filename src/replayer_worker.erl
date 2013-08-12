@@ -43,22 +43,43 @@ request(Worker, Req) ->
 init(_Args) ->
     {ok, _State = ok}.
 
-handle_call({request, Req}, _From, State) ->
+% BC start
+handle_request({get,Ts,Url}) -> handle_request({{http,get},Ts,{Url}});
+handle_request({post,Ts,Url,Body}) -> handle_request({{http,post},Ts,{Url,Body}});
+% BC end
+handle_request({{http,_},_,_} = Req) -> 
     {Method, TS, Url, Body} = case Req of
+        % BC start
         {get, TS_, U} -> {get, TS_, U, []};
-        {post, TS_, U, B} -> {post, TS_, U, B}
+        {post, TS_, U, B} -> {post, TS_, U, B};
+        % BC end
+        {{http,get}, TS_, {U}} -> {{http,get}, TS_, U, []};
+        {{http,post}, TS_, {U, B}} -> {{http,post}, TS_, U, B}
     end,
     OUrl = override_params(TS, Url),
     OBody = case Body of
         [] -> [];
         _ -> list_to_binary(override_params(TS, binary_to_list(Body)))
     end,
-    Res = case lhttpc:request(OUrl, Method, [], OBody, ?TIMEOUT) of
+    case lhttpc:request(OUrl, Method, [], OBody, ?TIMEOUT) of
         {ok, {{StatusCode, _ReasonPhrase}, _Hdrs, _ResponseBody}} ->
             {ok, StatusCode};
         {error, _Reason} = Error -> Error
-    end,
+    end;
+handle_request({{rpc,call},_Ts,{NodeInfo, {M,F,A}}}) ->
+    case get_node_from_nodeinfo(NodeInfo) of
+        {error, _} = Error -> Error;
+        {ok, Node} ->
+            case rpc:call(Node, M, F, A) of
+                {badrpc, _} = Error -> {error, Error};
+                Res -> {ok, Res}
+            end
+    end.
+
+handle_call({request, Req}, _From, State) ->
+    Res = handle_request(Req),
     {reply, Res, State};
+
 handle_call(_Request, _From, State) ->
     {reply, ok, State}.
 
@@ -77,6 +98,26 @@ code_change(_OldVsn, State, _Extra) ->
 %% ------------------------------------------------------------------
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
+
+get_node_from_nodeinfo(NodeInfo) when is_atom(NodeInfo) -> {ok, NodeInfo};
+get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) -> 
+    Handlers = case application:get_env(node_info_handlers) of
+        undefined -> [];
+        {ok, Hs} -> Hs
+    end,
+    case proplists:get_value(NodeType, Handlers) of
+        undefined -> 
+            NodeInfoStr = replayer_utils:term_to_string(NodeInfo),
+            {error, "no handler for nodeinfo: " ++ NodeInfoStr};
+        {M,F} -> % echo_view_config:vrnodes_by_cname
+            Node = case M:F(NodeSpec) of
+                N when is_atom(N) -> N;
+                [N|_] = Ns when is_atom(N) -> replayer_utils:random_element(Ns)
+            end,
+            {ok, Node}   
+    end.
+
+
 
 override_params(ReqTS, Str) ->
     case re:run(Str, "^(.+)([?|&])since=([0-9]+.[0-9]+)(.*)$",
