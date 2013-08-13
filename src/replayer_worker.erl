@@ -101,20 +101,23 @@ code_change(_OldVsn, State, _Extra) ->
 
 get_node_from_nodeinfo(NodeInfo) when is_atom(NodeInfo) -> {ok, NodeInfo};
 get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) -> 
-    Handlers = case application:get_env(node_info_handlers) of
-        undefined -> [];
-        {ok, Hs} -> Hs
-    end,
-    case proplists:get_value(NodeType, Handlers) of
-        undefined -> 
-            NodeInfoStr = replayer_utils:term_to_string(NodeInfo),
-            {error, "no handler for nodeinfo: " ++ NodeInfoStr};
-        {M,F} -> % echo_view_config:vrnodes_by_cname
-            Node = case M:F(NodeSpec) of
-                N when is_atom(N) -> N;
-                [N|_] = Ns when is_atom(N) -> replayer_utils:random_element(Ns)
-            end,
-            {ok, Node}   
+    Handlers = get_env(node_info_handlers, []),
+    case get_env(node_info_executable_node) of
+        undefined ->
+            {error, "no node_info_executable_node specified"};
+        RPCNode ->
+            case proplists:get_value(NodeType, Handlers) of
+                undefined -> 
+                    NodeInfoStr = replayer_utils:term_to_string(NodeInfo),
+                    {error, "no handler for nodeinfo: " ++ NodeInfoStr};
+                {M,F} -> % echo_view_config:vrnodes_by_cname
+                    Node = case rpc:call(RPCNode, M, F, [NodeSpec]) of
+                        {badrpc, _} = E -> {error, E};
+                        N when is_atom(N) -> N;
+                        [N|_] = Ns when is_atom(N) -> replayer_utils:random_element(Ns)
+                    end,
+                    {ok, Node}   
+            end
     end.
 
 
