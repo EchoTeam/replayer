@@ -101,8 +101,8 @@ code_change(_OldVsn, State, _Extra) ->
 
 get_node_from_nodeinfo(NodeInfo) when is_atom(NodeInfo) -> {ok, NodeInfo};
 get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) -> 
-    Handlers = get_env(node_info_handlers, []),
-    case get_env(node_info_executable_node) of
+    Handlers = replayer_utils:get_env(node_info_handlers, []),
+    case replayer_utils:get_env(node_info_executable_node) of
         undefined ->
             {error, "no node_info_executable_node specified"};
         RPCNode ->
