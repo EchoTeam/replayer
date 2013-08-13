@@ -8,7 +8,9 @@
     ts_of_string/1,
     unixtimestamp/0,
     unixtimestamp/1,
-    with_chunks/4
+    with_chunks/4,
+    get_env/1,
+    get_env/2
 ]).
 
 -export_type([
@@ -89,3 +91,10 @@ random_element(L) ->
     random:seed(now()),
     I = random:uniform(length(L)),
     lists:nth(I, L).
+
+get_env(Key) -> get_env(Key, undefined).
+get_env(Key, Default) ->
+    case application:get_env(Key) of
+        undefined -> Default;
+        {ok, V} -> V
+    end.
