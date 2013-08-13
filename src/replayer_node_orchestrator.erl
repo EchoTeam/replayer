@@ -50,7 +50,7 @@ read_meta() ->
     Meta.
 
 start_link() ->
-    {ok, PoolSize} = application:get_env(worker_pool_size),
+    PoolSize = replayer_utils:get_env(worker_pool_size, 5),
     poolboy:start([
             {name, {local, ?MODULE}},
             {size, PoolSize},
