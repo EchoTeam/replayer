@@ -72,6 +72,7 @@ handle_request({{rpc,call},_Ts,{NodeInfo, {M,F,A}}}) ->
         {ok, Node} ->
             case rpc:call(Node, M, F, A) of
                 {badrpc, _} = Error -> {error, Error};
+                {error, _} = Error -> {error, Error};
                 Res -> {ok, Res}
             end
     end.
