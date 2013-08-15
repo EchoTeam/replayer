@@ -37,7 +37,7 @@ websocket_info({stats, {Ring, WorkersNum, File, Counters}}, Req, State) ->
                             case lists:keysearch(reply_statuses, 1, CS) of
                                 false -> [];
                                 {value, {_, L}} ->
-                                    {[{I2B(SC), C} || {SC, C} <- L]}
+                                    {[{I2B(SC), C} || {SC, C} <- L, is_integer(SC)]}
                             end}
                     ]}
             } || {Node, CS} <- Counters, is_list(CS)]},
