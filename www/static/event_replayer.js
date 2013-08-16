@@ -42,7 +42,8 @@
             var total_tasks_processed = 0;
             var total_tasks_failed = 0;
             var total_reply_errors = 0;
-            var total_statuses = {};
+            var total_ok_messages = {};
+            var total_error_messages = {};
             $.each(data.stats.ring, function(i, node) {
                 var nodedata = data.stats.nodes[node];
                 ringnodes += (i ? ', ' : '') + node;
@@ -66,16 +67,28 @@
                     nodestats += '    Successed: ' + nodedata.counters.tasks_processed + ', Failed: ' + nodedata.counters.tasks_failed + ', Reply errors: ' + nodedata.counters.reply_errors + ', Total: ' + nodedata.counters.tasks_count;
                     nodestats += '    </small>';
                     nodestats += '  </div>';
-                    var statuses = '';
-                    $.each(nodedata.statuses, function(sc, sv) {
-                        statuses += sc + ': ' + sv + '<br/>';
-                        if (!total_statuses[sc]) {
-                            total_statuses[sc] = 0;
+                    var ok_messages = '';
+                    $.each(nodedata.ok_messages, function(sc, sv) {
+                        ok_messages += sc + ': ' + sv + '<br/>';
+                        if (!total_ok_messages[sc]) {
+                            total_ok_messages[sc] = 0;
                         }
-                        total_statuses[sc] += sv;
+                        total_ok_messages[sc] += sv;
                     });
-                    if (statuses) {
-                        nodestats += '<h5>HTTP Statuses</h5>' + statuses;
+                    if (ok_messages) {
+                        nodestats += '<h5>OK Messages</h5>' + ok_messages;
+                    };
+
+                    var error_messages = '';
+                    $.each(nodedata.error_messages, function(sc, sv) {
+                        error_messages += sc + ': ' + sv + '<br/>';
+                        if (!total_error_messages[sc]) {
+                            total_error_messages[sc] = 0;
+                        }
+                        total_error_messages[sc] += sv;
+                    });
+                    if (error_messages) {
+                        nodestats += '<h5>ERROR Messages</h5>' + error_messages;
                     };
                     nodestats += '</div>';
                 }
