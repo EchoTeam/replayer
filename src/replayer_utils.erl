@@ -1,10 +1,13 @@
 -module(replayer_utils).
 
 -export([
+    is_simple_term/1,
+    is_simple_string/1,
     query_params_of_request/1,
     random_element/1,
     request_timestamp/1,
     term_to_string/1,
+    term_to_list_binary/1,
     ts_of_string/1,
     unixtimestamp/0,
     unixtimestamp/1,
@@ -98,3 +101,15 @@ get_env(Key, Default) ->
         undefined -> Default;
         {ok, V} -> V
     end.
+
+is_simple_term(T) when is_integer(T) -> true;
+is_simple_term(T) when is_atom(T) -> true;
+is_simple_term(T) when is_list(T) -> is_simple_string(T);
+is_simple_term(_) -> false.
+
+is_simple_string(L) -> 
+    length(L) < 100 andalso lists:all(fun(C) -> is_integer(C) end, L).
+
+term_to_list_binary(T) when is_integer(T) -> list_to_binary(integer_to_list(T));
+term_to_list_binary(T) when is_atom(T) -> list_to_binary(atom_to_list(T));
+term_to_list_binary(T) when is_list(T) -> list_to_binary(T).
