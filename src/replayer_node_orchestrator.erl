@@ -102,6 +102,14 @@ replay_requests(Reqs, RealStartTs, LogStartTs, Speed) ->
     end, Reqs),
     ok.
 
+is_simple_term(T) when is_integer(T) -> true;
+is_simple_term(T) when is_atom(T) -> true;
+is_simple_term(T) when is_list(T) -> is_simple_string(T);
+is_simple_term(_) -> false.
+
+is_simple_string(L) -> 
+    length(L) < 100 andalso lists:all(fun(C) -> is_integer(C) end, L).
+
 request(Req) ->
     case poolboy:checkout(?MODULE, false) of
         Error when Error == full; Error == overflow ->%error(not_enough_workers)
@@ -112,10 +120,18 @@ request(Req) ->
                 try 
                     replayer_stats:bump(tasks_processed),
                     case replayer_worker:request(Worker, Req) of
-                        {ok, Status} ->
-                            replayer_stats:bump({reply_statuses, Status});
-                        {error, _} ->
-                            replayer_stats:bump(reply_errors)
+                        {ok, Msg} ->
+                            replayer_stats:bump(reply_oks),
+                            case is_simple_term(Msg) of
+                                true -> replayer_stats:bump({reply_ok_msg, Msg});
+                                false -> nop
+                            end;
+                        {error, Msg} ->
+                            replayer_stats:bump(reply_errors),
+                            case is_simple_term(Msg) of
+                                true -> replayer_stats:bump({reply_error_msg, Msg});
+                                false -> nop
+                            end
                     end
                 catch _:_ ->
                     replayer_stats:bump(tasks_failed)
