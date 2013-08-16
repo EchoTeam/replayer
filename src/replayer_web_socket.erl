@@ -43,10 +43,10 @@ websocket_info({stats, {Ring, WorkersNum, File, Counters}}, Req, State) ->
                             {CN, CV} <- CS,
                             not lists:member(CN, [reply_error_msgs, reply_ok_msgs])
                         ]}},
-                    {<<"ok messages">>, 
+                    {<<"ok_messages">>, 
                         process_msgs(lists:keysearch(reply_ok_msgs, 1, CS))
                         },
-                    {<<"error messages">>, 
+                    {<<"error_messages">>, 
                         process_msgs(lists:keysearch(reply_error_msgs, 1, CS))
                         }
                 ]}
