@@ -65,6 +65,9 @@ start_link() ->
 init([]) ->
     {ok, #state{}}.
 
+get_top10(PropList) -> 
+    lists:sublist(lists:keysort(2, PropList), 10).
+
 handle_call(get_stats, _From, State) ->
     Stats = [
         {tasks_count,       State#state.tasks_count},
@@ -72,8 +75,8 @@ handle_call(get_stats, _From, State) ->
         {tasks_failed,      State#state.tasks_failed},
         {reply_errors,      State#state.reply_errors},
         {reply_oks,         State#state.reply_oks},
-        {reply_error_msgs,  lists:sort(dict:to_list(State#state.reply_error_msgs))},
-        {reply_ok_msgs,     lists:sort(dict:to_list(State#state.reply_ok_msgs))}
+        {reply_error_msgs,  get_top10(dict:to_list(State#state.reply_error_msgs))},
+        {reply_ok_msgs,     get_top10(dict:to_list(State#state.reply_ok_msgs))}
     ],
     {reply, Stats, State};
 handle_call(_Request, _From, State) ->

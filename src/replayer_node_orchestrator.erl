@@ -115,13 +115,13 @@ request(Req) ->
                         {ok, Msg} ->
                             replayer_stats:bump(reply_oks),
                             case replayer_utils:is_simple_term(Msg) of
-                                true -> replayer_stats:bump({reply_ok_msg, Msg});
+                                true -> replayer_stats:bump({reply_ok_msg, replayer_utils:term_to_list_binary(Msg)});
                                 false -> nop
                             end;
                         {error, Msg} ->
                             replayer_stats:bump(reply_errors),
                             case replayer_utils:is_simple_term(Msg) of
-                                true -> replayer_stats:bump({reply_error_msg, Msg});
+                                true -> replayer_stats:bump({reply_error_msg, replayer_utils:term_to_list_binary(Msg)});
                                 false -> nop
                             end
                     end
