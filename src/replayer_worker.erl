@@ -106,9 +106,9 @@ handle_request({{rpc,call},_Ts,{NodeInfo, {M,F,A}}}) ->
 get_node_from_nodeinfo(NodeInfo) when is_atom(NodeInfo) -> {ok, NodeInfo};
 get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) -> 
     Handlers = replayer_utils:get_env(node_info_handlers, []),
-    case replayer_utils:get_env(node_info_executable_node) of
+    case replayer_utils:get_env(connector_node) of
         undefined ->
-            {error, "no node_info_executable_node specified"};
+            {error, "no connector_node specified"};
         RPCNode ->
             case proplists:get_value(NodeType, Handlers) of
                 undefined -> 
