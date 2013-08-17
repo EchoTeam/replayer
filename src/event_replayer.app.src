@@ -11,6 +11,11 @@
   {env, [
     {web_port, 8080},
     {worker_pool_size, 5},
+    {connector_node, jskit@gli},
+    {node_info_handlers, [
+        {vrc, {echo_view_config, vrnodes_by_cname}},
+        {vuc, {echo_view_config, vunodes_by_cname}}
+    ]},
     {log_parsers, [
         {disk_log, disk_log_parser},
         {http_log, http_log_parser},
