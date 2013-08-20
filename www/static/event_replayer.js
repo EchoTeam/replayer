@@ -110,12 +110,19 @@
                 overallstats += '    Successed: ' + total_tasks_processed + ', Failed: ' + total_tasks_failed + ', Reply errors: ' + total_reply_errors + ', Total: ' + total_tasks_count;
                 overallstats += '    </small>';
                 overallstats += '  </div>';
-                var overallstatuses = '';
-                $.each(total_statuses, function(sc, sv) {
-                    overallstatuses += sc + ': ' + sv + '<br/>';
+                var okstatuses = '';
+                $.each(total_ok_messages, function(sc, sv) {
+                    okstatuses += sc + ': ' + sv + '<br/>';
                 });
-                if (overallstatuses) {
-                    overallstats += '<h5>HTTP Statuses</h5>' + overallstatuses;
+                if (okstatuses) {
+                    overallstats += '<h5>OK messages</h5>' + okstatuses;
+                };
+                var errorstatuses = '';
+                $.each(total_error_messages, function(sc, sv) {
+                    errorstatuses += sc + ': ' + sv + '<br/>';
+                });
+                if (errorstatuses) {
+                    overallstats += '<h5>ERROR messages</h5>' + errorstatuses;
                 };
                 $('#overallProgress').html(overallstats);
             } else {
