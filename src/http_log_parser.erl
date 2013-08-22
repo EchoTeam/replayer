@@ -144,8 +144,8 @@ assemble_request(Type, TS, Path, Headers, Body) ->
     Host = proplists:get_value("host", Headers),
     Url = "http://" ++ Host ++ Path,
     case Type of
-        "GET" -> {get, TS, Url};
-        "POST" -> {post, TS, Url, Body}
+        "GET" -> {{http,get}, TS, {Url}};
+        "POST" -> {{http,post}, TS, {Url, Body}}
     end.
 
 strip(Str) -> Str -- [$\r, $\n].

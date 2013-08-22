@@ -25,24 +25,30 @@ websocket_handle({text, Msg}, Req, {Session, _SessionOpts} = State) ->
 websocket_handle(_Data, Req, State) ->
     {ok, Req, State}.
 
+a2b(A) -> list_to_binary(atom_to_list(A)).
+
 websocket_info({stats, {Ring, WorkersNum, File, Counters}}, Req, State) ->
-    A2B = fun(A) -> list_to_binary(atom_to_list(A)) end,
-    I2B = fun(I) -> list_to_binary(integer_to_list(I)) end,
     Nodes = {[{
-                    A2B(Node),
-                    {[
-                        {<<"counters">>, {[{A2B(CN), CV} ||
-                                    {CN, CV} <- CS, CN /= reply_statuses]}},
-                        {<<"statuses">>,
-                            case lists:keysearch(reply_statuses, 1, CS) of
-                                false -> [];
-                                {value, {_, L}} ->
-                                    {[{I2B(SC), C} || {SC, C} <- L]}
-                            end}
-                    ]}
-            } || {Node, CS} <- Counters, is_list(CS)]},
+            a2b(Node),
+            {[
+                {<<"counters">>, {[{a2b(CN), CV} ||
+                        {CN, CV} <- CS,
+                        not lists:member(CN, [reply_error_msgs, reply_ok_msgs])
+                    ]}},
+                {<<"ok_messages">>, 
+                    case lists:keysearch(reply_ok_msgs, 1, CS) of
+                        false -> [];
+                        {value, {_, L}} -> {L}
+                    end },
+                {<<"error_messages">>, 
+                    case lists:keysearch(reply_error_msgs, 1, CS) of
+                        false -> [];
+                        {value, {_, L}} -> {L}
+                    end }
+            ]}
+        } || {Node, CS} <- Counters, is_list(CS)]},
     Stats = {[
-            {<<"ring">>, [A2B(Node) || Node <- Ring]},
+            {<<"ring">>, [a2b(Node) || Node <- Ring]},
             {<<"workers_num">>, WorkersNum},
             {<<"file">>, case File of
                             undefined -> undefined;

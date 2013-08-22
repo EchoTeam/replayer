@@ -32,7 +32,9 @@
     tasks_processed = 0,
     tasks_failed = 0,
     reply_errors = 0,
-    reply_statuses = dict:new()
+    reply_oks = 0,
+    reply_error_msgs = dict:new(),
+    reply_ok_msgs = dict:new()
 }).
 
 
@@ -63,13 +65,18 @@ start_link() ->
 init([]) ->
     {ok, #state{}}.
 
+get_top10(PropList) -> 
+    lists:sublist(lists:keysort(2, PropList), 10).
+
 handle_call(get_stats, _From, State) ->
     Stats = [
-        {tasks_count, State#state.tasks_count},
-        {tasks_processed, State#state.tasks_processed},
-        {tasks_failed, State#state.tasks_failed},
-        {reply_errors, State#state.reply_errors},
-        {reply_statuses, lists:sort(dict:to_list(State#state.reply_statuses))}
+        {tasks_count,       State#state.tasks_count},
+        {tasks_processed,   State#state.tasks_processed},
+        {tasks_failed,      State#state.tasks_failed},
+        {reply_errors,      State#state.reply_errors},
+        {reply_oks,         State#state.reply_oks},
+        {reply_error_msgs,  get_top10(dict:to_list(State#state.reply_error_msgs))},
+        {reply_ok_msgs,     get_top10(dict:to_list(State#state.reply_ok_msgs))}
     ],
     {reply, Stats, State};
 handle_call(_Request, _From, State) ->
@@ -81,9 +88,14 @@ handle_cast({bump, tasks_failed}, State) ->
     {noreply, State#state{tasks_failed = State#state.tasks_failed + 1}};
 handle_cast({bump, reply_errors}, State) ->
     {noreply, State#state{reply_errors = State#state.reply_errors + 1}};
-handle_cast({bump, {reply_statuses, Status}}, State) ->
-    ReplyStatuses = dict:update_counter(Status, 1, State#state.reply_statuses),
-    {noreply, State#state{reply_statuses = ReplyStatuses}};
+handle_cast({bump, reply_oks}, State) ->
+    {noreply, State#state{reply_oks = State#state.reply_oks + 1}};
+handle_cast({bump, {reply_error_msg, ErrorMsg}}, State) ->
+    ErrorMsgs = dict:update_counter(ErrorMsg, 1, State#state.reply_error_msgs),
+    {noreply, State#state{reply_error_msgs = ErrorMsgs}};
+handle_cast({bump, {reply_ok_msg, OkMsg}}, State) ->
+    OkMsgs = dict:update_counter(OkMsg, 1, State#state.reply_ok_msgs),
+    {noreply, State#state{reply_ok_msgs = OkMsgs}};
 handle_cast(flush, _State) ->
     {noreply, #state{}};
 handle_cast({set_tasks_count, TasksCount}, State) ->

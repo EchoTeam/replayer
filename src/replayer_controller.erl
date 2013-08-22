@@ -178,7 +178,7 @@ handle_call(get_state, _From, State) ->
 handle_call({set_replay_speed, Speed}, _From, State) ->
     {reply, ok, State#state{replay_speed = Speed}};
 handle_call(get_stats, _From, #state{ring = Ring, tasks_file = File} = State) ->
-    {ok, WorkersNum} = application:get_env(event_replayer, worker_pool_size),
+    WorkersNum = replayer_utils:get_env(worker_pool_size, 5),
     {reply, {Ring, WorkersNum, File}, State};
 handle_call(prepare, _From, State) ->
     Res = case disk_log:open([

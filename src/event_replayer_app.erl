@@ -36,10 +36,7 @@ stop(_State) ->
     ok.
 
 start_web_server() ->
-    WWWRootDir = case application:get_env(www_dir) of
-        undefined -> "./www";
-        {ok, WWWRootDir_} -> WWWRootDir_
-    end,
+    WWWRootDir = replayer_utils:get_env(www_dir, "./www"),
     Dispatch = cowboy_router:compile([
         {'_', [
                 {"/", replayer_web_index, []},
@@ -50,11 +47,8 @@ start_web_server() ->
                     ]}
             ]}
     ]),
-    Port = case application:get_env(web_port) of
-        undefined -> "8080";
-        {ok, Port_} -> Port_
-    end,
-    {ok, _} = cowboy:start_http(http, 100, [{port, list_to_integer(Port)}],
+    Port = replayer_utils:get_env(web_port, 8080),
+    {ok, _} = cowboy:start_http(http, 100, [{port, Port}],
                     [
                         {middlewares, [
                                             cowboy_router,
