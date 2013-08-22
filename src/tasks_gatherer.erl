@@ -78,10 +78,7 @@ close_target_file() ->
     disk_log:close(?TARGET).
 
 get_log_parser(FileType) ->
-    AllProcessors = case application:get_env(event_replayer, log_parsers) of
-        undefined -> [];
-        {ok, All} -> All
-    end,
+    AllProcessors = replayer_utils:get_env(log_parsers, []),
     case proplists:get_value(FileType, AllProcessors) of 
         undefined -> throw("no registered processor for the log of type " 
                 ++ atom_to_list(FileType) 

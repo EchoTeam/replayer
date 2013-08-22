@@ -50,7 +50,7 @@ read_meta() ->
     Meta.
 
 start_link() ->
-    {ok, PoolSize} = application:get_env(worker_pool_size),
+    PoolSize = replayer_utils:get_env(worker_pool_size, 5),
     poolboy:start([
             {name, {local, ?MODULE}},
             {size, PoolSize},
@@ -112,10 +112,18 @@ request(Req) ->
                 try 
                     replayer_stats:bump(tasks_processed),
                     case replayer_worker:request(Worker, Req) of
-                        {ok, Status} ->
-                            replayer_stats:bump({reply_statuses, Status});
-                        {error, _} ->
-                            replayer_stats:bump(reply_errors)
+                        {ok, Msg} ->
+                            replayer_stats:bump(reply_oks),
+                            case replayer_utils:is_simple_term(Msg) of
+                                true -> replayer_stats:bump({reply_ok_msg, replayer_utils:term_to_list_binary(Msg)});
+                                false -> nop
+                            end;
+                        {error, Msg} ->
+                            replayer_stats:bump(reply_errors),
+                            case replayer_utils:is_simple_term(Msg) of
+                                true -> replayer_stats:bump({reply_error_msg, replayer_utils:term_to_list_binary(Msg)});
+                                false -> nop
+                            end
                     end
                 catch _:_ ->
                     replayer_stats:bump(tasks_failed)

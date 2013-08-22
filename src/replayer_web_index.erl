@@ -7,19 +7,13 @@
 ]).
 
 init(_Transport, Req, Opts) ->
-    RootDir = case application:get_env(event_replayer, www_dir) of
-        undefined -> "./www";
-        {ok, RootDir_} -> RootDir_
-    end,
+    RootDir = replayer_utils:get_env(www_dir, "./www"),
     {session, Session, CookieOpts} = lists:keyfind(session, 1, Opts),
     {ok, Req, {RootDir, {Session, CookieOpts}}}.
 
 handle(Req, {RootDir, {_Session, CookieOpts}} = State) ->
     Auths = credentials(Req),
-    Credentials = case application:get_env(event_replayer, credentials) of
-        undefined -> undefined;
-        {ok, Credentials_} -> Credentials_
-    end,
+    Credentials = replayer_utils:get_env(credentials, undefined),
     {ok, Req3} = case check_user(Auths, Credentials) of
         undefined ->
             unauthorized(Req);
