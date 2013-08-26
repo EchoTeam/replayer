@@ -95,7 +95,7 @@ handle_request({{rpc,call},_Ts,{NodeInfo, {M,F,A}}}) ->
         {error, _} = Error -> Error;
         {ok, Node} ->
             case rpc:call(Node, M, F, A) of
-                {badrpc, _} -> {error, badrpc_error_msg(Node)};
+                {badrpc, _} -> {error, badrpc_error_msg(Node, "while making rpc:call")};
                 {error, _} = Error -> Error;
                 Res -> {ok, Res}
             end
@@ -117,7 +117,7 @@ get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) ->
                 {M,F} -> % echo_view_config:vrnodes_by_cname
                     case rpc:call(RPCNode, M, F, [NodeSpec]) of
                         {badrpc, _} -> 
-                            {error, badrpc_error_msg(RPCNode)};
+                            {error, badrpc_error_msg(RPCNode, "while getting node from nodeinfo")};
                         N when is_atom(N) ->
                             {ok, N};
                         [N|_] = Ns when is_atom(N) ->
@@ -126,9 +126,9 @@ get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) ->
             end
     end.
 
-badrpc_error_msg(Node) -> 
+badrpc_error_msg(Node, Where) -> 
     NodeStr = replayer_utils:term_to_string(Node),
-    "badrpc for information node " ++ NodeStr.
+    "badrpc for node " ++ NodeStr ++ " " ++ Where.
 
 
 override_params(ReqTS, Str) ->
