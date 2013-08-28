@@ -97,7 +97,7 @@ random_element(L) ->
 
 get_env(Key) -> get_env(Key, undefined).
 get_env(Key, Default) ->
-    case application:get_env(Key) of
+    case application:get_env(event_replayer, Key) of
         undefined -> Default;
         {ok, V} -> V
     end.
