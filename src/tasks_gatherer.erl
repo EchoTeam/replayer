@@ -1,3 +1,4 @@
+%%% vim: set ts=4 sts=4 sw=4 et:
 -module(tasks_gatherer).
 
 -export([
@@ -139,15 +140,25 @@ get_and_read_next(Idx, Handlers) ->
     {Request, NewHandlers}.
 
 maybe_override_request(Request, Options) ->
-    case proplists:get_value(change_host, Options) of
+    Request1 = case proplists:get_value(change_host, Options) of
         undefined -> Request;
         NewHost -> change_request_host(Request, NewHost)
+    end,
+    case proplists:get_value(change_cname, Options) of
+        undefined -> Request1;
+        NewCName -> change_request_cname(Request1, NewCName)
     end.
 
 change_request_host({get, TS, URL}, NewHost) ->
     {get, TS, change_url_host(URL, NewHost)};
 change_request_host({post, TS, URL, Body}, NewHost) ->
     {post, TS, change_url_host(URL, NewHost), Body}.
+
+change_request_cname({{rpc, call}, Ts, {{vrc, _CName},   {M, F, A}}}, NewCName) ->
+                     {{rpc, call}, Ts, {{vrc, NewCName}, {M, F, A}}};
+change_request_cname({{rpc, call}, Ts, {{vuc, CName},    {echo_vuc, call, [CName,    ViewId, M, F, A]}}}, NewCName) ->
+                     {{rpc, call}, Ts, {{vuc, NewCName}, {echo_vuc, call, [NewCName, ViewId, M, F, A]}}};
+change_request_cname(Request, _NewCName) -> Request.
 
 change_url_host(URL, NewHost) ->
     case re:run(URL, "^(https?://)([^/]*)(/.*)$", [{capture, [1,2,3], list}]) of
