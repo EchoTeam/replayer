@@ -68,17 +68,15 @@ code_change(_OldVsn, State, _Extra) ->
 
 -spec handle_request(replayer_utils:request()) -> {ok, any()} | {error, any()}.
 % BC start
-handle_request({get,Ts,Url}) -> handle_request({{http,get},Ts,{Url}});
-handle_request({post,Ts,Url,Body}) -> handle_request({{http,post},Ts,{Url,Body}});
+handle_request({get, Ts, Url}) ->
+    handle_request({{http, get}, Ts, {Url}});
+handle_request({post, Ts, Url, Body}) ->
+    handle_request({{http, post}, Ts, {Url, Body}});
 % BC end
-handle_request({{http,_},_,_} = Req) -> 
-    {Method, TS, Url, Body} = case Req of
-        % BC start
-        {get, TS_, U} -> {get, TS_, U, []};
-        {post, TS_, U, B} -> {post, TS_, U, B};
-        % BC end
-        {{http,get}, TS_, {U}} -> {{http,get}, TS_, U, []};
-        {{http,post}, TS_, {U, B}} -> {{http,post}, TS_, U, B}
+handle_request({{http, Method}, TS, HTTPData}) ->
+    {Url, Body} = case HTTPData of
+        {Url_} -> {Url_, []};
+        {Url_, Body_} -> {Url_, Body_}
     end,
     OUrl = override_params(TS, Url),
     OBody = case Body of
@@ -90,12 +88,13 @@ handle_request({{http,_},_,_} = Req) ->
             {ok, StatusCode};
         {error, _} = Error -> Error
     end;
-handle_request({{rpc,call},_Ts,{NodeInfo, {M,F,A}}}) ->
+handle_request({{rpc, call}, _Ts, {NodeInfo, {M, F, A}}}) ->
     case get_node_from_nodeinfo(NodeInfo) of
         {error, _} = Error -> Error;
         {ok, Node} ->
             case rpc:call(Node, M, F, A) of
-                {badrpc, _} -> {error, badrpc_error_msg(Node, "while making rpc:call")};
+                {badrpc, _} ->
+                    {error, badrpc_error_msg(Node, "while making rpc:call")};
                 {error, _} = Error -> Error;
                 Res -> {ok, Res}
             end
@@ -104,20 +103,21 @@ handle_request({{rpc,call},_Ts,{NodeInfo, {M,F,A}}}) ->
 -type nodeinfo() :: any(). % FIXME:
 -spec get_node_from_nodeinfo(nodeinfo()) -> {ok, node()} | {error, any()}.
 get_node_from_nodeinfo(NodeInfo) when is_atom(NodeInfo) -> {ok, NodeInfo};
-get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) -> 
+get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) ->
     Handlers = replayer_utils:get_env(node_info_handlers, []),
     case replayer_utils:get_env(connector_node) of
         undefined ->
             {error, "no connector_node specified"};
         RPCNode ->
             case proplists:get_value(NodeType, Handlers) of
-                undefined -> 
+                undefined ->
                     NodeInfoStr = replayer_utils:term_to_string(NodeInfo),
                     {error, "no handler for nodeinfo: " ++ NodeInfoStr};
                 {M,F} -> % echo_view_config:vrnodes_by_cname
                     case rpc:call(RPCNode, M, F, [NodeSpec]) of
-                        {badrpc, _} -> 
-                            {error, badrpc_error_msg(RPCNode, "while getting node from nodeinfo")};
+                        {badrpc, _} ->
+                            {error, badrpc_error_msg(RPCNode,
+                                        "while getting node from nodeinfo")};
                         N when is_atom(N) ->
                             {ok, N};
                         [N|_] = Ns when is_atom(N) ->
@@ -126,7 +126,7 @@ get_node_from_nodeinfo({NodeType, NodeSpec} = NodeInfo) ->
             end
     end.
 
-badrpc_error_msg(Node, Where) -> 
+badrpc_error_msg(Node, Where) ->
     NodeStr = replayer_utils:term_to_string(Node),
     "badrpc for node " ++ NodeStr ++ " " ++ Where.
 
