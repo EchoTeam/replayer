@@ -8,7 +8,8 @@
 
 -export([
     start_link/1,
-    request/2
+    request/2,
+    bump/2
 ]).
 
 %% ------------------------------------------------------------------
@@ -66,7 +67,62 @@ code_change(_OldVsn, State, _Extra) ->
 %% Internal Function Definitions
 %% ------------------------------------------------------------------
 
+bump(_Msg, 0) -> ok;
+bump(Msg, Cnt) ->
+    replayer_stats:bump({reply_ok_msg, Msg}),
+    bump(Msg, Cnt-1).
+
+call_cache(Op, Data) ->
+    L = case rpc:call('jskit@siden', router_cache, Op, [Data]) of
+        {badrpc, _Error} ->
+            io:format("~p~n", [_Error]),
+            [{"bad_rpc", {1, 0}}];
+        V -> V
+    end,
+    lists:foreach(fun({C, {H, M}}) ->
+            B = case is_list(C) of
+                true -> list_to_binary(C);
+                _ -> C
+            end,
+            bump(<<B/binary, "_hit">>, H),
+            bump(<<B/binary, "_miss">>, M)
+        end, L),
+    {ok, Op}.
+
+
 -spec handle_request(replayer_utils:request()) -> {ok, any()} | {error, any()}.
+
+handle_request({accessed_views, _, {Views}}) ->
+    call_cache(set, Views);
+handle_request(HTTPReq) ->
+    {ok, Params} = replayer_utils:query_params_of_request(HTTPReq),
+    Query = proplists:get_value("q", Params),
+    Requests = proplists:get_value("requests", Params),
+    AppKey = proplists:get_value("appkey", Params),
+    Url = case HTTPReq of
+        {_, _, {Url}} -> Url;
+        {_, _, {Url, _}} -> Url;
+        {_, _, Url} -> Url;
+        {_, _, Url, _} -> Url
+    end,
+    Method = case Url of
+        "http://api.echoenabled.com/v1/count" ++ _ -> "count";
+        "http://echoapi.wpdigital.net/v1/count" ++ _ -> "count";
+        _ -> "live"
+    end,
+    case {Requests, Query, AppKey} of
+        {undefined, undefined, undefined} -> {ok, 0};
+        {undefined, undefined, _} -> {ok, 1};
+        {_, _, undefined} -> {ok, 2};
+        {undefined, _, _} ->
+            case Method of
+                "count" -> nop;
+                _ -> io:format("~p~n", [HTTPReq])
+            end,
+            call_cache(get, {Method, Query, AppKey});
+        {_, undefined, _} -> call_cache(get, {mux, Requests, AppKey})
+    end;
+
 % BC start
 handle_request({get, Ts, Url}) ->
     handle_request({{http, get}, Ts, {Url}});

@@ -47,7 +47,7 @@ start_web_server() ->
                     ]}
             ]}
     ]),
-    Port = replayer_utils:get_env(web_port, 8080),
+    Port = 8081, %replayer_utils:get_env(web_port, 8081),
     {ok, _} = cowboy:start_http(http, 100, [{port, Port}],
                     [
                         {middlewares, [

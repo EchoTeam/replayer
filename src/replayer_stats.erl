@@ -66,7 +66,7 @@ init([]) ->
     {ok, #state{}}.
 
 get_top10(PropList) -> 
-    lists:sublist(lists:keysort(2, PropList), 10).
+    lists:sublist(lists:keysort(2, PropList), 50).
 
 handle_call(get_stats, _From, State) ->
     Stats = [
