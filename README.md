@@ -6,7 +6,7 @@ requests with adjustable request rate relative to the captured rate.
 
 To replay the requests you need
 -------------------------------
-* the requests themselves,
+* the requests themselves (use [replayer_logger](https://github.com/EchoTeam/replayer_logger) to store them)
 * the cluster to repeat all the requests (with configurable option 'number of workers' on each node in the cluster),
 * main cluster to handle all the requests
 * the event_replayer application :)
